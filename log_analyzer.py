@@ -57,6 +57,14 @@ def parse_log_line(line):
 
     return result
 
+def median(lst):
+    n = len(lst)
+    if n < 1:
+            return None
+    if n % 2 == 1:
+            return sorted(lst)[n//2]
+    else:
+            return sum(sorted(lst)[n//2-1:n//2+1])/2.0
 
 def process_log_file(filename):
     """
@@ -75,13 +83,14 @@ def process_log_file(filename):
     stat = {}
 
     total_count = 0
-    total_rtime = 0
+    total_time = 0
     line_num = 0
+
 
     for line in fp:
         line_num += 1
         try:
-            uri, rtime = parse_log_line(line)
+            uri, rtime = parse_log_line(line.rstrip())
         except Exception as e:
             logging.info("skipped line  %d", line_num)
             continue
@@ -89,16 +98,30 @@ def process_log_file(filename):
         try:
             prev_stat = stat[uri]
         except Exception as e:
-            prev_stat = stat[uri] = {'count':0, 'time_sum': 0, 'time_max':0}
+            prev_stat = stat[uri] = {'count':0, 'time_sum': 0, 'time_max':0, 'time_list':[]}
 
         stat[uri]['count'] = prev_stat['count'] + 1
         stat[uri]['time_sum'] = prev_stat['time_sum'] + rtime
         stat[uri]['time_max'] = prev_stat['time_sum'] if rtime <= prev_stat['time_sum'] else rtime
+        stat[uri]['time_list'].append(rtime)
+        
         total_count += 1
-        total_rtime += rtime
+        total_time += rtime
 
         if line_num % 100000 == 0:
             logging.info("%d lines processed", line_num)
+
+    logging.info("Calculating aggregates on total %d lines",line_num)
+    
+    # pass 2 - calculate aggregates
+    for uri, data in stat.iteritems():
+        stat[uri]['count_perc'] = data['count']/total_count
+        stat[uri]['time_perc'] = data['time_sum']/total_time
+        stat[uri]['time_perc'] = data['time_sum']/total_time
+        stat[uri]['time_avg'] = data['time_sum']/data['count']
+        stat[uri]['time_med'] = median(data['time_list'])
+
+    return stat
             
 
 
@@ -139,8 +162,7 @@ def main():
     last_processed = load_last_processed(config['TS_FILE'])
 
     target_files = get_target_files(dirfiles, last_processed)
-    print(target_files)
-
+    logging.info("Target files: %s", ",".join(target_files))
     stat = process_log_file(os.path.join(config['LOG_DIR'], target_files[0]))
     print(stat)
 

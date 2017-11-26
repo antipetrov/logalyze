@@ -1,2 +1,2 @@
-# logalyzer
+# logalyze
 some logparser

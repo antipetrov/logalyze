@@ -9,3 +9,26 @@
 
 
 import unittest
+from datetime import date
+import time
+from log_analyzer import *
+
+
+class MainCase(unittest.TestCase):
+    
+    def test_target_files(self):
+        target_files = get_target_files(['nginx-access-ui.log-20170101.gz','nginx-access-ui.log-20170102.gz'],0)
+        self.assertIsInstance(target_files, list)
+        self.assertEqual(len(target_files), 2)
+
+    def test_target_files_filter(self):
+
+        target_files = get_target_files(['nginx-access-ui.log-20170101.gz','nginx-access-ui.log-20170102.gz'],int(time.mktime(date(2017,01,01).timetuple())))
+        self.assertIsInstance(target_files, list)
+        self.assertEqual(len(target_files), 1)
+        
+
+
+
+if __name__ == '__main__':
+    unittest.main()

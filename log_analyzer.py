@@ -44,7 +44,7 @@ def process_log_file(filename):
     """
     pass
 
-def get_target_files(from_timestamp, file_list):
+def get_target_files(file_list, from_timestamp):
     target_files = []
 
     from_datetime = datetime.fromtimestamp(from_timestamp)
@@ -55,9 +55,9 @@ def get_target_files(from_timestamp, file_list):
         if fname_match:
             fname_date_part = fname_match.group(1)
             if int(fname_date_part) > int(start_date_mark):
-                target_files.append({"filename":filename, "date":int(fname_date_part)})
+                target_files.append(filename)
 
-    sorted(target_files)
+    sorted(target_files, reverse=True)
     return target_files
 
 
@@ -68,7 +68,7 @@ def main():
     dirfiles = os.listdir(config['LOG_DIR'])
     last_processed = load_last_processed(config['TS_FILE'])
 
-    target_files = get_target_files(last_processed, dirfiles)
+    target_files = get_target_files(dirfiles, last_processed)
     print(target_files)
 
 if __name__ == "__main__":

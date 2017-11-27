@@ -60,11 +60,11 @@ def parse_log_line(line):
 def median(lst):
     n = len(lst)
     if n < 1:
-            return None
+        return None
     if n % 2 == 1:
-            return sorted(lst)[n//2]
+        return sorted(lst)[n//2]
     else:
-            return sum(sorted(lst)[n//2-1:n//2+1])/2.0
+        return sum(sorted(lst)[n//2-1:n//2+1])/2.0
 
 def process_log_file(filename):
     """
@@ -102,7 +102,7 @@ def process_log_file(filename):
 
         stat[uri]['count'] = prev_stat['count'] + 1
         stat[uri]['time_sum'] = prev_stat['time_sum'] + rtime
-        stat[uri]['time_max'] = prev_stat['time_sum'] if rtime <= prev_stat['time_sum'] else rtime
+        stat[uri]['time_max'] = prev_stat['time_max'] if rtime <= prev_stat['time_sum'] else rtime
         stat[uri]['time_list'].append(rtime)
         
         total_count += 1
@@ -112,14 +112,15 @@ def process_log_file(filename):
             logging.info("%d lines processed", line_num)
 
     logging.info("Calculating aggregates on total %d lines",line_num)
-    
+
     # pass 2 - calculate aggregates
     for uri, data in stat.iteritems():
-        stat[uri]['count_perc'] = data['count']/total_count
+        stat[uri]['count_perc'] = float(data['count'])/total_count
         stat[uri]['time_perc'] = data['time_sum']/total_time
         stat[uri]['time_perc'] = data['time_sum']/total_time
         stat[uri]['time_avg'] = data['time_sum']/data['count']
         stat[uri]['time_med'] = median(data['time_list'])
+        del stat[uri]['time_list']
 
     return stat
             

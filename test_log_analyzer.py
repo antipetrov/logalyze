@@ -48,11 +48,16 @@ class LogProcessorCase(unittest.TestCase):
     # print(m.group(5))
     # print(m.group(6))
     # print(m.group(7))
+    def test_stat(self):
+        pass
 
-    def test_report_template(self):
+    def test_report_render(self):
         processor = LogProcessor()
         
-        stat = {'/api/v2/banner/25918447/statistic/outgoings/?date_from=2017-06-28&date_to=2017-06-28': {'count': 1, 'time_avg': 0.072, 'time_list': [0.072], 'time_max': 0.072, 'time_sum': 0.072, 'time_med': 0.072, 'time_perc': 3.7353134982832446e-08, 'count_perc': 0}, '/api/v2/banner/17096340/': {'count': 2, 'time_avg': 0.5065, 'time_list': [0.596, 0.417], 'time_max': 1.013, 'time_sum': 1.013, 'time_med': 0.5065, 'time_perc': 5.255378574667954e-07, 'count_perc': 0}, '/api/v2/internal/banner/24324264/info': {'count': 1, 'time_avg': 0.076, 'time_list': [0.076], 'time_max': 0.076, 'time_sum': 0.076, 'time_med': 0.076, 'time_perc': 3.942830914854536e-08, 'count_perc': 0}, '/ads/campaigns/7863032/gpmd/event_statistic/?date1=29-06-2017&date2=29-06-2017&date_type=day&puid1=&puid2=&puid3=': {'count': 1, 'time_avg': 3.724, 'time_list': [3.724], 'time_max': 3.724, 'time_sum': 3.724, 'time_med': 3.724, 'time_perc': 1.931987148278723e-06, 'count_perc': 0}}
+        stat = {'/api/v2/banner/25918447/statistic/outgoings/?date_from=2017-06-28&date_to=2017-06-28': 
+                    {'count': 1, 'time_avg': 0.072, 'time_list': [0.072], 'time_max': 0.072, 'time_sum': 0.072, 'time_med': 0.072, 'time_perc': 3.7353134982832446e-08, 'count_perc': 0}, '/api/v2/banner/17096340/': {'count': 2, 'time_avg': 0.5065, 'time_list': [0.596, 0.417], 'time_max': 1.013, 'time_sum': 1.013, 'time_med': 0.5065, 'time_perc': 5.255378574667954e-07, 'count_perc': 0}, '/api/v2/internal/banner/24324264/info': {'count': 1, 'time_avg': 0.076, 'time_list': [0.076], 'time_max': 0.076, 'time_sum': 0.076, 'time_med': 0.076, 'time_perc': 3.942830914854536e-08, 'count_perc': 0}, 
+                '/ads/campaigns/7863032/gpmd/event_statistic/?date1=29-06-2017&date2=29-06-2017&date_type=day&puid1=&puid2=&puid3=': 
+                    {'count': 1, 'time_avg': 3.724, 'time_list': [3.724], 'time_max': 3.724, 'time_sum': 3.724, 'time_med': 3.724, 'time_perc': 1.931987148278723e-06, 'count_perc': 0}}
         report = processor.render_report(stat, datetime.today())
         pos = report.find('/api/v2/banner/25918447/statistic/outgoings/?date_from=2017-06-28&date_to=2017-06-28')
         self.assertNotEqual(pos, -1)

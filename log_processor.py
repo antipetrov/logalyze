@@ -66,16 +66,20 @@ class LogProcessor(object):
 
         except Exception as e:
             logging.error('Could not parse log date %s for with pattern %s. Error: %s', filename, self.config['LOG_FILE_PATTERN'], e.message)
-            exit()
+            return None, None
 
         filepath = os.path.join(self.config['LOG_DIR'], filename)
 
         # open plain or gzip
         import gzip
-        if filename.endswith('.gz'):
-            fp = gzip.open(filepath)
-        else:
-            fp = open(filepath)
+        try:
+            if filename.endswith('.gz'):
+                fp = gzip.open(filepath)
+            else:
+                fp = open(filepath)
+        except Exception as e:
+            logging.error('Unable to open file %s', filepath)
+            return None, None
 
         # init values
         stat = {}
@@ -123,6 +127,9 @@ class LogProcessor(object):
             stat[uri]['time_avg'] = data['time_sum']/data['count']
             stat[uri]['time_med'] = median(data['time_list'])
             del stat[uri]['time_list']
+
+        # sort it
+        sorted(stat, cmp=lambda x,y: cmp(x['time_avg'], y['time_avg']), reverse=True)
 
         return stat, date_processed
             
@@ -205,6 +212,8 @@ class LogProcessor(object):
             ts_file = open(ts_file_path)
             return int(ts_file.readline())
         except Exception as e:
+            logging.error('Unable to load last processed timestamp. Using 0')
+            
             return 0
 
     def save_last_processed(self, ts_filename):
@@ -222,18 +231,20 @@ class LogProcessor(object):
 
     def process(self):
         last_processed = self.load_last_processed(self.config['TS_FILE'])
-
         logfile_list = os.listdir(self.config['LOG_DIR'])
+        
         target_files = self.get_target_files(logfile_list, last_processed)
         logging.info("Target files: %s", ",".join(target_files))
+
         for tfilename in target_files:
             stat, processed_date = self.process_log_file(tfilename)
+            
+            if stat:
+                report = self.render_report(stat, processed_date)
 
-        report = self.render_report(stat, processed_date)
-
-        if report:
-            ts_filename = self.config.get('TS_FILE', './log_analyzer.ts')
-            self.save_last_processed(ts_filename)
+            if stat and report:
+                ts_filename = self.config.get('TS_FILE', './log_analyzer.ts')
+                self.save_last_processed(ts_filename)
 
 
 def median(lst):

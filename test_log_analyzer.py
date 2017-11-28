@@ -9,8 +9,11 @@
 
 
 import unittest
-from datetime import datetime, date
+import os
 import time
+from datetime import datetime, date
+
+
 from log_processor import LogProcessor
 
 
@@ -21,7 +24,6 @@ class LogProcessorCase(unittest.TestCase):
         target_files = processor.get_target_files(['nginx-access-ui.log-20170101.gz','nginx-access-ui.log-20170102.gz'],0)
         self.assertIsInstance(target_files, list)
         self.assertEqual(len(target_files), 2)
-        print(target_files)
 
     def test_target_files_filter(self):
         processor = LogProcessor()
@@ -52,11 +54,34 @@ class LogProcessorCase(unittest.TestCase):
         
         stat = {'/api/v2/banner/25918447/statistic/outgoings/?date_from=2017-06-28&date_to=2017-06-28': {'count': 1, 'time_avg': 0.072, 'time_list': [0.072], 'time_max': 0.072, 'time_sum': 0.072, 'time_med': 0.072, 'time_perc': 3.7353134982832446e-08, 'count_perc': 0}, '/api/v2/banner/17096340/': {'count': 2, 'time_avg': 0.5065, 'time_list': [0.596, 0.417], 'time_max': 1.013, 'time_sum': 1.013, 'time_med': 0.5065, 'time_perc': 5.255378574667954e-07, 'count_perc': 0}, '/api/v2/internal/banner/24324264/info': {'count': 1, 'time_avg': 0.076, 'time_list': [0.076], 'time_max': 0.076, 'time_sum': 0.076, 'time_med': 0.076, 'time_perc': 3.942830914854536e-08, 'count_perc': 0}, '/ads/campaigns/7863032/gpmd/event_statistic/?date1=29-06-2017&date2=29-06-2017&date_type=day&puid1=&puid2=&puid3=': {'count': 1, 'time_avg': 3.724, 'time_list': [3.724], 'time_max': 3.724, 'time_sum': 3.724, 'time_med': 3.724, 'time_perc': 1.931987148278723e-06, 'count_perc': 0}}
         report = processor.render_report(stat, datetime.today())
-        print(report)
+        pos = report.find('/api/v2/banner/25918447/statistic/outgoings/?date_from=2017-06-28&date_to=2017-06-28')
+        self.assertNotEqual(pos, -1)
 
     def test_ts_file_save(self):
+
+        ts_filename = '.test.ts'
+
         processor = LogProcessor()
-        processor.save_last_processed('./test.ts')
+        processor.save_last_processed(ts_filename)
+
+        time_val = str(int(time.time()))
+        fp = open(ts_filename)
+        ts_value = fp.readline().strip()
+        fp.close()
+
+        os.remove(ts_filename)
+
+        self.assertEqual(time_val, ts_value)
+
+    def test_ts_file_load(self):
+        ts_filename = '.test_load.ts'
+        processor = LogProcessor()
+        time_val = str(int(time.time()))
+        processor.save_last_processed(ts_filename)
+        loaded_val = processor.load_last_processed(ts_filename)
+
+        self.assertLess(int(loaded_val) - int(time_val), 2)
+
 
 
 

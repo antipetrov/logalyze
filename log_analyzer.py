@@ -41,10 +41,9 @@ def main():
     log_path = config.get("PROCESS_LOG", None)
     logging_params = {'format':'[%(asctime)s] %(levelname).1s %(message)s', 'level':logging.INFO}
     if log_path:
-        logging_params['filename'] = log_path, 
+        logging_params['filename'] = log_path
     
     logging.basicConfig(**logging_params)
-
 
     # init processor
     processor = LogProcessor(config)

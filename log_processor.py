@@ -4,9 +4,10 @@
 
 import os
 import re
-from logger import log
 import json
-from time import time
+import time
+
+from logger import log
 from datetime import datetime
 from decimal import Decimal
 
@@ -225,32 +226,33 @@ class LogProcessor(object):
         return target_files
 
     def load_last_processed(self, ts_file_path):
+        last_timestamp = 0
         try:
             ts_file = open(ts_file_path)
-            return self.timestamp_to_datetime(int(ts_file.readline()))
+            last_timestamp = int(ts_file.readline())
+            ts_file.close()
         except Exception as e:
             log.error('Unable to load last processed timestamp. Using 0')
-            return self.timestamp_to_datetime(0)
+
+        return datetime.fromtimestamp(last_timestamp)
 
     def save_last_processed(self, ts_filename, processed_datetime):
-        from time import time
+        timestamp = int(time.mktime(processed_datetime.timetuple()))
+
         try: 
             fp = open(ts_filename, 'w')
-            fp.write(str(self.datetime_to_timestamp(processed_date)))
+            fp.write(str(timestamp))
             fp.close()
         except Exception as e:
             log.error('Unable to write processing timestamp. Error: %s', e.message)
             return False
-
         return True
 
-    def datetime_to_timestamp(self, dt):
-        return time.mktime(dt.timetuple())
+    # def datetime_to_timestamp(self, dt):
+    #     return int(time.mktime(dt.timetuple()))
 
-    def timestamp_to_datetime(self, ts):
-        return datetime.fromtimestamp(ts)
-
-
+    # def timestamp_to_datetime(self, ts):
+    #     return datetime.fromtimestamp(ts)
 
     def process(self):
         last_processed = self.load_last_processed(self.config['TS_FILE'])
@@ -258,8 +260,8 @@ class LogProcessor(object):
         
         target_files = self.get_target_files(logfile_list, last_processed)
         if not target_files:
-            log.info('No files newer than %d found', last_processed)
-            print('No files newer than %d found' % last_processed)
+            log.info('No files newer than %s found', last_processed.strftime('%Y.%m.%d'))
+            print('No files newer than %s found' % last_processed.strftime('%Y.%m.%d'))
 
 
         log.info("Target files: %s", ",".join(target_files))
@@ -270,7 +272,7 @@ class LogProcessor(object):
                 log.info('processed %d lines', len(stat))
                 report = self.render_report(stat, processed_date)
             else:
-                log.info('failed to process file %s', tfilename)
+                log.info('failed to process log-file %s', tfilename)
                 continue
 
             if stat and report:

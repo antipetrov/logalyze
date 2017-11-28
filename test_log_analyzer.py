@@ -21,14 +21,14 @@ class LogProcessorCase(unittest.TestCase):
     
     def test_target_files(self):
         processor = LogProcessor()
-        target_files = processor.get_target_files(['nginx-access-ui.log-20170101.gz','nginx-access-ui.log-20170102.gz'],0)
+        target_files = processor.get_target_files(['nginx-access-ui.log-20170101.gz','nginx-access-ui.log-20170102.gz'],datetime(year=2000, month=1, day=1))
         self.assertIsInstance(target_files, list)
         self.assertEqual(len(target_files), 2)
 
     def test_target_files_filter(self):
         processor = LogProcessor()
 
-        target_files = processor.get_target_files(['nginx-access-ui.log-20170101.gz','nginx-access-ui.log-20170102.gz'],int(time.mktime(date(2017,01,01).timetuple())))
+        target_files = processor.get_target_files(['nginx-access-ui.log-20170101.gz','nginx-access-ui.log-20170102.gz'],datetime(year=2017, month=1, day=1))
         self.assertIsInstance(target_files, list)
         self.assertEqual(len(target_files), 1)
 
@@ -72,27 +72,45 @@ class LogProcessorCase(unittest.TestCase):
 
         ts_filename = '.test.ts'
 
-        ts = int(time.time())
+        start_time = datetime.now()
+        start_timestamp = int(time.mktime(start_time.timetuple()))
+
         processor = LogProcessor()
-        processor.save_last_processed(ts_filename, ts)
+        processor.save_last_processed(ts_filename, start_time)
+
 
         fp = open(ts_filename)
-        ts_value = fp.readline().strip()
+        ts_loaded = fp.readline().strip()
         fp.close()
 
         os.remove(ts_filename)
 
-        self.assertEqual(ts, int(ts_value))
+        loaded_timestamp = int(ts_loaded)
+
+        self.assertEqual(start_timestamp, loaded_timestamp)
 
     def test_ts_file_load(self):
         ts_filename = '.test_load.ts'
         processor = LogProcessor()
-        time_val = int(time.time())
-        processor.save_last_processed(ts_filename, time_val)
-        loaded_val = processor.load_last_processed(ts_filename)
+        time_now = datetime.now()
+        processor.save_last_processed(ts_filename, time_now)
+        loaded_time = processor.load_last_processed(ts_filename)
 
-        self.assertLess(int(loaded_val) - time_val, 2)
+        self.assertEqual(time_now, time_now)
 
+    def test_full_process(self):
+        config = {
+            "REPORT_SIZE": 1000,
+            "REPORT_DIR": "./test/reports",
+            "REPORT_TEMPLATE": "./report.html",
+            "PROCESS_LOG": "./log_analyzer.log",
+            "TS_FILE": "./test/test.ts",
+            "LOG_DIR": "./test/log",
+            "LOG_FILE_PATTERN": "nginx-access-ui.log-(\d+).(gz|log)"
+        }
+
+        processor = LogProcessor(config)
+        processor.process()
 
 
 

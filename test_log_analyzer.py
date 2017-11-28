@@ -9,21 +9,24 @@
 
 
 import unittest
-from datetime import date
+from datetime import datetime, date
 import time
-from log_analyzer import *
+from log_processor import LogProcessor
 
 
-class MainCase(unittest.TestCase):
+class LogProcessorCase(unittest.TestCase):
     
     def test_target_files(self):
-        target_files = get_target_files(['nginx-access-ui.log-20170101.gz','nginx-access-ui.log-20170102.gz'],0)
+        processor = LogProcessor()
+        target_files = processor.get_target_files(['nginx-access-ui.log-20170101.gz','nginx-access-ui.log-20170102.gz'],0)
         self.assertIsInstance(target_files, list)
         self.assertEqual(len(target_files), 2)
         print(target_files)
 
     def test_target_files_filter(self):
-        target_files = get_target_files(['nginx-access-ui.log-20170101.gz','nginx-access-ui.log-20170102.gz'],int(time.mktime(date(2017,01,01).timetuple())))
+        processor = LogProcessor()
+
+        target_files = processor.get_target_files(['nginx-access-ui.log-20170101.gz','nginx-access-ui.log-20170102.gz'],int(time.mktime(date(2017,01,01).timetuple())))
         self.assertIsInstance(target_files, list)
         self.assertEqual(len(target_files), 1)
 
@@ -33,9 +36,10 @@ class MainCase(unittest.TestCase):
 
     def test_line_parse(self):
         line = '1.138.198.128 -  - [30/Jun/2017:03:28:23 +0300] "GET /api/v2/banner/25949683 HTTP/1.1" 200 1261 "-" "python-requests/2.8.1" "-" "1498782502-440360380-4707-10488740" "4e9627334" 0.863'
-        parse_result = parse_log_line(line)
-        self.assertEqual(parse_result[0], '/api/v2/banner/25949683')
-        self.assertLess(parse_result[1] - float(0.863),  0.0001)
+        processor = LogProcessor()
+        parsed_url, parsed_time = processor.parse_log_line(line)
+        self.assertEqual(parsed_url, '/api/v2/banner/25949683')
+        self.assertEqual(parsed_time, '0.863')
 
     # pattern = '([0-9.]+) (.*) (.*) \[(.*)\] \"(\S+) ([^"]+) HTTP[^"]*\" .* ([0-9.]+)$'
     # m = re.match(pattern, line)
@@ -44,9 +48,15 @@ class MainCase(unittest.TestCase):
     # print(m.group(7))
 
     def test_report_template(self):
+        processor = LogProcessor()
+        
         stat = {'/api/v2/banner/25918447/statistic/outgoings/?date_from=2017-06-28&date_to=2017-06-28': {'count': 1, 'time_avg': 0.072, 'time_list': [0.072], 'time_max': 0.072, 'time_sum': 0.072, 'time_med': 0.072, 'time_perc': 3.7353134982832446e-08, 'count_perc': 0}, '/api/v2/banner/17096340/': {'count': 2, 'time_avg': 0.5065, 'time_list': [0.596, 0.417], 'time_max': 1.013, 'time_sum': 1.013, 'time_med': 0.5065, 'time_perc': 5.255378574667954e-07, 'count_perc': 0}, '/api/v2/internal/banner/24324264/info': {'count': 1, 'time_avg': 0.076, 'time_list': [0.076], 'time_max': 0.076, 'time_sum': 0.076, 'time_med': 0.076, 'time_perc': 3.942830914854536e-08, 'count_perc': 0}, '/ads/campaigns/7863032/gpmd/event_statistic/?date1=29-06-2017&date2=29-06-2017&date_type=day&puid1=&puid2=&puid3=': {'count': 1, 'time_avg': 3.724, 'time_list': [3.724], 'time_max': 3.724, 'time_sum': 3.724, 'time_med': 3.724, 'time_perc': 1.931987148278723e-06, 'count_perc': 0}}
-        report = render_report(stat, datetime.today())
+        report = processor.render_report(stat, datetime.today())
         print(report)
+
+    def test_ts_file_save(self):
+        processor = LogProcessor()
+        processor.save_last_processed('./test.ts')
 
 
 

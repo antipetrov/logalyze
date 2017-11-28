@@ -232,7 +232,7 @@ class LogProcessor(object):
             log.error('Unable to load last processed timestamp. Using 0')
             return self.timestamp_to_datetime(0)
 
-    def save_last_processed(self, ts_filename, processed_date):
+    def save_last_processed(self, ts_filename, processed_datetime):
         from time import time
         try: 
             fp = open(ts_filename, 'w')
@@ -245,7 +245,7 @@ class LogProcessor(object):
         return True
 
     def datetime_to_timestamp(self, dt):
-        return time.mktime(d.timetuple())
+        return time.mktime(dt.timetuple())
 
     def timestamp_to_datetime(self, ts):
         return datetime.fromtimestamp(ts)

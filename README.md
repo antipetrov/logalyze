@@ -26,11 +26,12 @@ PROCESS_LOG = ./process.log
 * LOG_FILE_PATTERN - паттерн для имени файла лога - первая группа = дата файла в формате %Y%m%d
 * PROCESS_LOG - файл лога скрипта (если не указан - лог выводится в stdout)
 
-## Запуск скрипта
-`python log_analyzer.py [-h] [--config CONFIG_FILE]`
+Настройки должны всегда находиться в секции [DEFAULT]
 
-  -h, --help            Помощь
-  --config CONFIG_FILE  Путь к файлу конфига
+## Запуск скрипта
+`python log_analyzer.py [--config CONFIG_FILE]`
+
+* --config CONFIG_FILE  - Путь к файлу конфига
 
 ## Запуск тестов
 python -m unittest test_log_analyzer.py

@@ -34,5 +34,5 @@ PROCESS_LOG = ./process.log
 * --config CONFIG_FILE  - Путь к файлу конфига
 
 ## Запуск тестов
-python -m unittest test_log_analyzer.py
+`python -m unittest test_log_analyzer.py`
 

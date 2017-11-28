@@ -4,11 +4,21 @@
 
 import os
 import re
-import logging
+from logger import log
 import json
+from time import time
 from datetime import datetime
 from decimal import Decimal
 
+
+def median(lst):
+    n = len(lst)
+    if n < 1:
+        return None
+    if n % 2 == 1:
+        return sorted(lst)[n//2]
+    else:
+        return sum(sorted(lst)[n//2-1:n//2+1])/2.0
 
 
 class LogProcessor(object):
@@ -40,13 +50,13 @@ class LogProcessor(object):
         try:
             log_match = re.match(pattern, line)
         except Exception as e:
-            logging.error("error parsing line:'%s' message:%s", line, e.message)
+            log.error("error parsing line:'%s' message:%s", line, e.message)
             raise    
 
         try:
             result = (log_match.group(6), log_match.group(7))
         except Exception as e:
-            logging.error("error parsing line (no groups):'%s' message:%s", line, e.message)
+            log.error("error parsing line (no groups):'%s' message:%s", line, e.message)
             raise
 
         return result
@@ -57,7 +67,7 @@ class LogProcessor(object):
         process logfile
         """
 
-        logging.info("Start processing %s", filename)
+        log.info("Start processing %s", filename)
 
         # get date part of file
         try:
@@ -65,7 +75,7 @@ class LogProcessor(object):
             date_processed = datetime.strptime(fname_match.group(1), "%Y%m%d")
 
         except Exception as e:
-            logging.error('Could not parse log date %s for with pattern %s. Error: %s', filename, self.config['LOG_FILE_PATTERN'], e.message)
+            log.error('Could not parse log date %s for with pattern %s. Error: %s', filename, self.config['LOG_FILE_PATTERN'], e.message)
             return None, None
 
         filepath = os.path.join(self.config['LOG_DIR'], filename)
@@ -78,7 +88,7 @@ class LogProcessor(object):
             else:
                 fp = open(filepath)
         except Exception as e:
-            logging.error('Unable to open file %s', filepath)
+            log.error('Unable to open file %s', filepath)
             return None, None
 
         # init values
@@ -94,7 +104,7 @@ class LogProcessor(object):
             try:
                 uri, rtime = self.parse_log_line(line.rstrip())
             except Exception as e:
-                logging.info("skipped line  %d", line_num)
+                log.info("skipped line  %d", line_num)
                 continue
 
             responce_time = float(rtime)
@@ -113,28 +123,36 @@ class LogProcessor(object):
 
             # log progress
             if line_num % 100000 == 0:
-                logging.info("%d lines processed", line_num)
+                log.info("%d lines processed", line_num)
 
         fp.close()
 
-        # pass 2 - calculate aggregates
-        logging.info("Calculating aggregates on total %d lines",line_num)
+        # pass 2 - calculate aggregates & convert
+        log.info("Calculating aggregates on total %d lines",line_num)
 
-        for uri, data in stat.iteritems():
-            stat[uri]['count_perc'] = float(data['count'])/total_count
-            stat[uri]['time_perc'] = data['time_sum']/total_time
-            stat[uri]['time_perc'] = data['time_sum']/total_time
-            stat[uri]['time_avg'] = data['time_sum']/data['count']
-            stat[uri]['time_med'] = median(data['time_list'])
-            del stat[uri]['time_list']
+        stat_list = []
+        for url,  data in stat.iteritems():
+            stat_list.append({
+                'url':url,
+                'count':data['count'],
+                'time_max':data['time_max'],
+                'time_sum':data['time_sum'],
+                'time_avg':data['time_sum']/data['count'],
+                'time_med':median(data['time_list']), 
+                'time_perc':data['time_sum']/total_time,
+                'count_perc':float(data['count'])/total_count,
+                })
 
         # sort it
-        sorted(stat, cmp=lambda x,y: cmp(x['time_avg'], y['time_avg']), reverse=True)
+        import operator
+        stat_list.sort(key=operator.itemgetter('time_avg'), reverse=True)
 
-        return stat, date_processed
+        max_lines = self.config.get('REPORT_SIZE', 1000)
+
+        return stat_list[:int(max_lines)], date_processed
             
 
-    def render_report(self, stat, processed_date):
+    def render_report(self, stat_list, processed_date):
         """
         Render stat into html file.
         Uses REPORT_TEMPLATE from config as page-template
@@ -149,9 +167,9 @@ class LogProcessor(object):
 
         # re-format stat to list
         stat_rows = []
-        for url, data in stat.iteritems():
+        for data in stat_list:
             stat_rows.append({
-                'url':url,
+                'url':data['url'],
                 'count':data['count'],
                 'time_avg':'{0:.10f}'.format(data['time_avg']),
                 'time_max':'{0:.10f}'.format(data['time_max']),
@@ -169,7 +187,7 @@ class LogProcessor(object):
             ftemp = open(report_template_filename, "r")
             template = "".join(ftemp.readlines())
         except Exception as e:
-            logging.error('Failed to read report template file "%s": %s', (report_template_filename, e.message))
+            log.error('Failed to read report template file "%s": %s', (report_template_filename, e.message))
             return None
 
         report_str = template.replace('$table_json', stat_json)
@@ -181,20 +199,19 @@ class LogProcessor(object):
             frep.write(report_str)
             frep.close()
         except Exception as e:
-            logging.error('Failed to write report file: %s', e.message)
+            log.error('Failed to write report file: %s', e.message)
             return None
 
         return report_str    
 
 
-    def get_target_files(self, file_list, from_timestamp):
+    def get_target_files(self, file_list, from_datetime):
         """
         Get files with date-part of in filename greater than date of from_timestamp
         Timezones are believed to match 
         """
         target_files = []
 
-        from_datetime = datetime.fromtimestamp(from_timestamp)
         start_date_mark = from_datetime.strftime("%Y%m%d")
         
         for filename in file_list:
@@ -210,23 +227,29 @@ class LogProcessor(object):
     def load_last_processed(self, ts_file_path):
         try:
             ts_file = open(ts_file_path)
-            return int(ts_file.readline())
+            return self.timestamp_to_datetime(int(ts_file.readline()))
         except Exception as e:
-            logging.error('Unable to load last processed timestamp. Using 0')
-            
-            return 0
+            log.error('Unable to load last processed timestamp. Using 0')
+            return self.timestamp_to_datetime(0)
 
-    def save_last_processed(self, ts_filename):
+    def save_last_processed(self, ts_filename, processed_date):
         from time import time
         try: 
             fp = open(ts_filename, 'w')
-            fp.write(str(int(time())))
+            fp.write(str(self.datetime_to_timestamp(processed_date)))
             fp.close()
         except Exception as e:
-            logging.error('Unable to write processing timestamp. Error: %s', e.message)
+            log.error('Unable to write processing timestamp. Error: %s', e.message)
             return False
 
         return True
+
+    def datetime_to_timestamp(self, dt):
+        return time.mktime(d.timetuple())
+
+    def timestamp_to_datetime(self, ts):
+        return datetime.fromtimestamp(ts)
+
 
 
     def process(self):
@@ -234,26 +257,22 @@ class LogProcessor(object):
         logfile_list = os.listdir(self.config['LOG_DIR'])
         
         target_files = self.get_target_files(logfile_list, last_processed)
-        logging.info("Target files: %s", ",".join(target_files))
+        if not target_files:
+            log.info('No files newer than %d found', last_processed)
+            print('No files newer than %d found' % last_processed)
 
+
+        log.info("Target files: %s", ",".join(target_files))
         for tfilename in target_files:
             stat, processed_date = self.process_log_file(tfilename)
-            
+
             if stat:
+                log.info('processed %d lines', len(stat))
                 report = self.render_report(stat, processed_date)
+            else:
+                log.info('failed to process file %s', tfilename)
+                continue
 
             if stat and report:
                 ts_filename = self.config.get('TS_FILE', './log_analyzer.ts')
-                self.save_last_processed(ts_filename)
-
-
-def median(lst):
-    n = len(lst)
-    if n < 1:
-        return None
-    if n % 2 == 1:
-        return sorted(lst)[n//2]
-    else:
-        return sum(sorted(lst)[n//2-1:n//2+1])/2.0
-
-
+                self.save_last_processed(ts_filename, datetime.now())

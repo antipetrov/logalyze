@@ -9,25 +9,27 @@
 
 
 import argparse
-import logging
+import os
 import ConfigParser
+from datetime import datetime
 
+from logger import log, stdout_handler, logging
 from log_processor import LogProcessor
 
-# config default
+
 
 def main():
-
-
+    start_time = datetime.now()
+    
     # options 
     arg_parser = argparse.ArgumentParser()
     arg_parser.add_argument('--config', dest='config_file', help='path to config-file')
     args = arg_parser.parse_args()
 
     if not args.config_file:
-        print("Starting with default config\n")
+        print("Starting with default config on %s"% start_time.isoformat())
     else:
-        print("Starting with config '%s'\n" % args.config_file)
+        print("Starting with config '%s' on %s" % (args.config_file, start_time.isoformat()))
 
     if args.config_file:
         fileconfig = ConfigParser.ConfigParser()
@@ -37,18 +39,26 @@ def main():
     else:
         config = LogProcessor.default_config
 
-    # logging 
+    # loggers
     log_path = config.get("PROCESS_LOG", None)
-    logging_params = {'format':'[%(asctime)s] %(levelname).1s %(message)s', 'level':logging.INFO}
     if log_path:
-        logging_params['filename'] = log_path
-    
-    logging.basicConfig(**logging_params)
+        # to file
+        print('process log: %s'%os.path.abspath(log_path))
+        formatter = logging.Formatter('[%(asctime)s] %(levelname).1s %(message)s')
+        file_handler = logging.FileHandler(os.path.abspath(log_path))
+        file_handler.setLevel(logging.INFO)
+        file_handler.setFormatter(formatter)        
+        log.addHandler(file_handler)
+    else:
+        # to stdout
+        print('logging into stoout')
+        log.addHandler(stdout_handler)
 
-    # init processor
+    # process
     processor = LogProcessor(config)
     processor.process()
 
+    print("Finished %s" % datetime.now().isoformat())
 
 if __name__ == "__main__":
     main()

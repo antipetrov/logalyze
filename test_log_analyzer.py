@@ -13,7 +13,7 @@ import os
 import time
 from datetime import datetime, date
 
-
+from logger import log
 from log_processor import LogProcessor
 
 
@@ -103,11 +103,18 @@ class LogProcessorCase(unittest.TestCase):
             "REPORT_SIZE": 1000,
             "REPORT_DIR": "./test/reports",
             "REPORT_TEMPLATE": "./report.html",
-            "PROCESS_LOG": "./log_analyzer.log",
+            "PROCESS_LOG": "./test/test.log",
             "TS_FILE": "./test/test.ts",
             "LOG_DIR": "./test/log",
-            "LOG_FILE_PATTERN": "nginx-access-ui.log-(\d+).(gz|log)"
+            "LOG_FILE_PATTERN": "nginx-access-ui.log-(\d+).(gz|log)",
+            "LAST_PROCESSED_FILE": "./test/last_processed.ts",
+
         }
+
+        try:
+            os.remove(config['LAST_PROCESSED_FILE'])
+        except OSError as e:
+            pass
 
         processor = LogProcessor(config)
         processor.process()

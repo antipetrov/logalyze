@@ -30,16 +30,17 @@ class LogProcessor(object):
         "REPORT_TEMPLATE": "./report.html",
         "PROCESS_LOG": "./log_analyzer.log",
         "TS_FILE": "./logalize.ts",
+        "LAST_PROCESSED_FILE": "./last_processed.ts",
         "LOG_DIR": "./log",
         "LOG_FILE_PATTERN": "nginx-access-ui.log-(\d+).(gz|log)"
     }
 
 
-    def __init__(self, config=None):
-        if not config:
-            self.config = LogProcessor.default_config
-        else:
-            self.config = config
+    def __init__(self, config={}):
+        self.config = LogProcessor.default_config
+        
+        # overwrite default config
+        self.config.update(config)
 
     def parse_log_line(self, line):
         """
@@ -248,14 +249,21 @@ class LogProcessor(object):
             return False
         return True
 
-    # def datetime_to_timestamp(self, dt):
-    #     return int(time.mktime(dt.timetuple()))
+    def update_ts_file(self, ts_filename):
+        timestamp = int(time.mktime(datetime.now().timetuple()))
+        
+        try:
+            fp = open(ts_filename, 'w')
+            fp.write(str(timestamp))
+            fp.close()
+        except Exception as e:
+            log.error('Unable to update ts file "%s": %s', ts_filename, e.message)
+            return False
 
-    # def timestamp_to_datetime(self, ts):
-    #     return datetime.fromtimestamp(ts)
+        return True
 
     def process(self):
-        last_processed = self.load_last_processed(self.config['TS_FILE'])
+        last_processed = self.load_last_processed(self.config['LAST_PROCESSED_FILE'])
         logfile_list = os.listdir(self.config['LOG_DIR'])
         
         target_files = self.get_target_files(logfile_list, last_processed)
@@ -276,5 +284,8 @@ class LogProcessor(object):
                 continue
 
             if stat and report:
-                ts_filename = self.config.get('TS_FILE', './log_analyzer.ts')
-                self.save_last_processed(ts_filename, datetime.now())
+                ts_filename = self.config.get('LAST_PROCESSED_FILE', './log_analyzer.ts')
+                self.save_last_processed(ts_filename, processed_date)
+
+
+        self.update_ts_file(self.config['TS_FILE'])

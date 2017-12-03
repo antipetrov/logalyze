@@ -24,18 +24,6 @@ def median(lst):
 
 class LogProcessor(object):
 
-    default_config = {
-        "REPORT_SIZE": 1000,
-        "REPORT_DIR": "./reports",
-        "REPORT_TEMPLATE": "./report.html",
-        "PROCESS_LOG": "./log_analyzer.log",
-        "TS_FILE": "./logalize.ts",
-        "LAST_PROCESSED_FILE": "./last_processed.ts",
-        "LOG_DIR": "./log",
-        "LOG_FILE_PATTERN": "nginx-access-ui.log-(\d+).(gz|log)"
-    }
-
-
     def __init__(self, config={}):
         self.config = LogProcessor.default_config
         

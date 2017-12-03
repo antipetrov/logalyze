@@ -11,10 +11,32 @@
 import argparse
 import os
 import ConfigParser
+import logging
 from datetime import datetime
 
-from logger import log, stdout_handler, logging
 from log_processor import LogProcessor
+
+defaut_config = {
+        "REPORT_SIZE": 1000,
+        "REPORT_DIR": "./reports",
+        "REPORT_TEMPLATE": "./report.html",
+        "PROCESS_LOG": "./log_analyzer.log",
+        "TS_FILE": "./logalize.ts",
+        "LAST_PROCESSED_FILE": "./last_processed.ts",
+        "LOG_DIR": "./log",
+        "LOG_FILE_PATTERN": "nginx-access-ui.log-(\d+).(gz|log)"
+    }
+ 
+
+def load_config():
+    pass
+
+def read_logfile():
+    pass
+
+
+def get_last_log():
+    pass
 
 
 
@@ -37,7 +59,7 @@ def main():
         fileconfig.read('default.conf')
         config = dict(fileconfig.defaults())
     else:
-        config = LogProcessor.default_config
+        config = default_config
 
     # loggers
     log_path = config.get("PROCESS_LOG", None)

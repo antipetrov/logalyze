@@ -221,7 +221,7 @@ class LogProcessor(object):
             last_timestamp = int(ts_file.readline())
             ts_file.close()
         except Exception as e:
-            log.error('Unable to load last processed timestamp. Using 0')
+            logging.error('Unable to load last processed timestamp. Using 0')
 
         return datetime.fromtimestamp(last_timestamp)
 

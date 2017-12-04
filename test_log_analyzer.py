@@ -14,34 +14,27 @@ import time
 from datetime import datetime, date
 
 from logger import log
-from log_processor import LogProcessor
-
+from log_analyzer import *
 
 class LogProcessorCase(unittest.TestCase):
     
-    def test_target_files(self):
-        processor = LogProcessor()
-        target_files = processor.get_target_files(['nginx-access-ui.log-20170101.gz','nginx-access-ui.log-20170102.gz'],datetime(year=2000, month=1, day=1))
+    def test_last_file(self):
+        target_files = get_last_file(['nginx-access-ui.log-20170101.gz','nginx-access-ui.log-20170102.gz'],datetime(year=2000, month=1, day=1), 'nginx-access-ui.log-(\d+).(gz|log)')
         self.assertIsInstance(target_files, list)
         self.assertEqual(len(target_files), 2)
 
-    def test_target_files_filter(self):
-        processor = LogProcessor()
 
-        target_files = processor.get_target_files(['nginx-access-ui.log-20170101.gz','nginx-access-ui.log-20170102.gz'],datetime(year=2017, month=1, day=1))
-        self.assertIsInstance(target_files, list)
-        self.assertEqual(len(target_files), 1)
-
-    def test_file_order(self):
-        #TODO: test order of processing
-        pass
 
     def test_line_parse(self):
         line = '1.138.198.128 -  - [30/Jun/2017:03:28:23 +0300] "GET /api/v2/banner/25949683 HTTP/1.1" 200 1261 "-" "python-requests/2.8.1" "-" "1498782502-440360380-4707-10488740" "4e9627334" 0.863'
-        processor = LogProcessor()
-        parsed_url, parsed_time = processor.parse_log_line(line)
+        parsed_url, parsed_time = parse_log_line(line)
         self.assertEqual(parsed_url, '/api/v2/banner/25949683')
         self.assertEqual(parsed_time, '0.863')
+
+        # bad line
+        line = '[30/Jun/2017:03:28:23 +0300] "GET /api/v2/banner/25949683 HTTP/1.1"'
+        parsed_url, parsed_time = parse_log_line(line)
+        self.assertRaises(Exception)
     
 
     def test_stat(self):
@@ -75,13 +68,10 @@ class LogProcessorCase(unittest.TestCase):
         start_time = datetime.now()
         start_timestamp = int(time.mktime(start_time.timetuple()))
 
-        processor = LogProcessor()
-        processor.save_last_processed(ts_filename, start_time)
+        save_last_processed(ts_filename, start_time)
 
-
-        fp = open(ts_filename)
-        ts_loaded = fp.readline().strip()
-        fp.close()
+        with open(ts_filename) as ts_loaded:
+            ts_loaded = fp.readline().strip()
 
         os.remove(ts_filename)
 

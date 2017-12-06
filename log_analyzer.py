@@ -9,6 +9,7 @@
 
 
 import os
+import shutil
 import argparse
 import ConfigParser
 import logging
@@ -30,6 +31,7 @@ default_config = {
     "LOG_FILE_PATTERN": "nginx-access-ui.log-(\d+).(gz|log)"
 }
 
+LogFile = namedtuple('LogFile', 'filename', 'date')
 ParsedLine = namedtuple('ParsedLine', 'url','response_time', 'parse_error')
 
 
@@ -70,7 +72,9 @@ def get_last_log(file_list, from_datetime, filename_pattern):
                 last_filename = filename
                 max_date_mark = int(fname_date_part)
 
-    return last_filename
+
+    max_datetime = datetime.datetime.strptime(max_date_mark, '%Y%m%d')
+    return last_filename, max_datetime
 
 def parse_log_line(line):
     """
@@ -125,7 +129,7 @@ def median(lst):
         return sum(sorted(lst)[n//2-1:n//2+1])/2.0
 
 
-def calc_stat(file):
+def process_logfile(file):
     total_count = 0
     total_time = 0.0
     line_num = 0
@@ -178,95 +182,81 @@ def calc_stat(file):
 
     return stat_list[:max_lines], date_processed
 
-
-def process_log_file(self, filename):
+def render_report(stat_list, template_file):
         """
-        process logfile
+        Render stat into html file.
+        Uses REPORT_TEMPLATE from config as page-template
+
+        :param stat - stat dict, where keys - uri`s
+        :param processed_date - inital date - used in resulting filename
+
+        result row: {"count": 2767, "time_avg": 62.994999999999997, "time_max": 9843.5689999999995, 
+                     "time_sum": 174306.35200000001, "url": "/api/v2/internal/html5/phantomjs/queue/?wait=1m", 
+                     "time_med": 60.073, "time_perc": 9.0429999999999993, "count_perc": 0.106}
         """
 
-        log.info("Start processing %s", filename)
-
-        # get date part of file
-        try:
-            fname_match = re.match(self.config['LOG_FILE_PATTERN'], filename)
-            date_processed = datetime.strptime(fname_match.group(1), "%Y%m%d")
-
-        except Exception as e:
-            log.error('Could not parse log date %s for with pattern %s. Error: %s', filename, self.config['LOG_FILE_PATTERN'], e.message)
-            return None, None
-
-        filepath = os.path.join(self.config['LOG_DIR'], filename)
-
-        # open plain or gzip
-        import gzip
-        try:
-            if filename.endswith('.gz'):
-                fp = gzip.open(filepath)
-            else:
-                fp = open(filepath)
-        except Exception as e:
-            log.error('Unable to open file %s', filepath)
-            return None, None
-
-        # init values
-        stat = {}
-
-        total_count = 0
-        total_time = 0.0
-        line_num = 0
-
-        # go parsing
-        for line in fp:
-            line_num += 1
-            try:
-                uri, rtime = self.parse_log_line(line.rstrip())
-            except Exception as e:
-                log.info("skipped line  %d", line_num)
-                continue
-
-            responce_time = float(rtime)
-            
-            current_stat = stat.get(uri, {'count':0, 'time_sum': 0.0, 'time_max':0.0, 'time_list':[]})
-        
-            current_stat['count'] = current_stat['count'] + 1
-            current_stat['time_sum'] = current_stat['time_sum'] + responce_time
-            current_stat['time_max'] = current_stat['time_max'] if responce_time <= current_stat['time_sum'] else responce_time
-            current_stat['time_list'].append(responce_time)
-            
-            stat[uri] = current_stat
-            
-            total_count += 1
-            total_time += responce_time
-
-            # log progress
-            if line_num % 100000 == 0:
-                log.info("%d lines processed", line_num)
-
-        fp.close()
-
-        # pass 2 - calculate aggregates & convert
-        log.info("Calculating aggregates on total %d lines",line_num)
-
-        stat_list = []
-        for url,  data in stat.iteritems():
-            stat_list.append({
-                'url':url,
+        # re-format stat to list
+        stat_rows = []
+        for data in stat_list:
+            stat_rows.append({
+                'url':data['url'],
                 'count':data['count'],
-                'time_max':data['time_max'],
-                'time_sum':data['time_sum'],
-                'time_avg':data['time_sum']/data['count'],
-                'time_med':median(data['time_list']), 
-                'time_perc':data['time_sum']/total_time,
-                'count_perc':float(data['count'])/total_count,
+                'time_avg':'{0:.10f}'.format(data['time_avg']),
+                'time_max':'{0:.10f}'.format(data['time_max']),
+                'time_sum':'{0:.10f}'.format(data['time_sum']),
+                'time_med':'{0:.10f}'.format(data['time_med']),
+                'time_perc':'{0:.10f}'.format(data['time_perc']),
+                'count_perc':'{0:.10f}'.format(data['count_perc']),
                 })
 
-        # sort it
-        import operator
-        stat_list.sort(key=operator.itemgetter('time_avg'), reverse=True)
+        stat_json = json.dumps(stat_rows)
 
-        max_lines = self.config.get('REPORT_SIZE', 1000)
+        report_template_filename = self.config.get("REPORT_TEMPLATE", None)    
+        
+        try:
+            ftemp = open(report_template_filename, "r")
+            template = "".join(ftemp.readlines())
+        except Exception as e:
+            log.error('Failed to read report template file "%s": %s', (report_template_filename, e.message))
+            return None
 
-        return stat_list[:int(max_lines)], date_processed
+        report_str = template.replace('$table_json', stat_json)
+        ftemp.close()
+
+
+        return report_str  
+
+def save_report(report_str, report_dir, report_date):
+    report_tmp_filename = "./report.tmp"
+    try:
+        with open(report_tmp_filename, 'w') as freport:
+            frep.write(report_str)
+    except Exception as e:
+        logging.error('Failed to write report to file: %s', e.message)
+        return None
+
+    try:
+        report_filename = os.path.join(report_dir, "report_%s.html"%datetime.strftime(report_date, "%Y.%m.%d"))
+        shutils.copyfile(report_tmp_filename, report_filename)
+    except Exception as e:
+        logging.error('Failed to write report to destination: %s', e.message)
+        return None        
+
+    return report_filename
+
+
+def update_ts_file(ts_filename):
+    timestamp = int(time.mktime(datetime.now().timetuple()))
+    
+    try:
+        fp = open(ts_filename, 'w')
+        fp.write(str(timestamp))
+        fp.close()
+    except Exception as e:
+        log.error('Unable to update ts file "%s": %s', ts_filename, e.message)
+        return False
+
+    return True
 
 
 def process(config):
@@ -279,15 +269,24 @@ def process(config):
         logging.error('Could not open log-dir %s. message: %s', config['LOG_DIR'], e.message)
 
     # get last log file
-    target_file = get_last_log(log_files_list, from_datetime, config['LOG_FILE_PATTERN'])
+    target_file, target_date = get_last_log(log_files_list, from_datetime, config['LOG_FILE_PATTERN'])
     if not target_file:
         logging.info('No logfile newer than %s found. Exiting', from_datetime.isoformat())
         exit()
     
     logging.info("Processing logfile: %s" % target_file)
-    stat = calc_stat(target_file) # can have exception
+    stat = process_logfile(target_file) # can have exception
 
-    
+    report_str = render_report(stat, config['TEMPLATE_FILE'])
+    saved_filename = save_report(report_str, config['REPORT_DIR'], target_date)
+    print("report file: %s" % saved_filename)
+
+    if saved_filename:
+        update_last_processed(config['LAST_PROCESSED_FILE'], target_date)
+        update_ts(config['TS_FILE'], datetime.now())
+
+
+
 
 
 

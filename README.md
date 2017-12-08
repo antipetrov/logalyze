@@ -11,10 +11,12 @@
 REPORT_SIZE=1000
 REPORT_DIR=./reports
 REPORT_TEMPLATE=./report.html
-TS_FILE=./logalize.ts
+TS_FILE=./log_analyzer.ts
 LOG_DIR=./log
 LOG_FILE_PATTERN=nginx-access-ui.log-(\d+).(gz|log)
-PROCESS_LOG = ./process.log
+PROCESS_LOG = ./log_analyzer.log
+LAST_PROCESSED_FILE = ./last_processed.ts
+
 ```
 
 Где 
@@ -36,3 +38,5 @@ PROCESS_LOG = ./process.log
 ## Запуск тестов
 `python -m unittest test_log_analyzer.py`
 
+## Повторный запуск
+После обработки, дата из имени лог-файла превращается в таймстамп и записывается в файл LAST_PROCESSED_FILE. При следующем старте таймстамп из LAST_PROCESSED_FILE читается, а в папке с логами - игнорятся все файлы у которых в имени дата - меньше таймстампа. Чтобы повторно обработать один и тот же файл - LAST_PROCESSED_FILE нужно удалить перед запуском.

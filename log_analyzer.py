@@ -216,12 +216,8 @@ def render_report
 
 def save_report(report_str, report_dir, report_date):
     report_tmp_filename = "./report.tmp"
-    try:
-        with open(report_tmp_filename, 'w') as freport:
-            freport.write(report_str)
-    except Exception as e:
-        logging.error('Failed to write report to file: %s', e.message)
-        return None
+    with open(report_tmp_filename, 'w') as report_tmp_file:
+        report_tmp_file.write(report_str)
 
     try:
         report_filename = os.path.join(report_dir, "report_%s.html"%datetime.strftime(report_date, "%Y.%m.%d"))
@@ -322,8 +318,8 @@ def main():
         fileconfig.read(config_filename)
         config_loaded = dict(fileconfig.defaults())
         config.update(config_loaded)
-    except Exception as e:
-        sys.exit('Could not process config file %s. Exiting' % config_filename)
+    except ConfigParser.Error as e:
+        sys.exit('Could not process config file %s. Error: %s. Exiting' % (config_filename, e.message))
 
     # logging
     logging_params = {
@@ -348,4 +344,7 @@ def main():
     print("Finished %s" % datetime.now().isoformat())
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        print('Unknown error: %s' % e.message)

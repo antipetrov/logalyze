@@ -9,6 +9,7 @@
 
 
 import os
+import sys
 import shutil
 import argparse
 import json
@@ -18,11 +19,6 @@ import re
 import time
 from datetime import datetime
 from collections import namedtuple
-
-
-from log_processor import LogProcessor
-
-
 
 ParsedLine = namedtuple('ParsedLine', ('url','response_time'))
 
@@ -88,7 +84,7 @@ def parse_log_line(line):
         raise    
 
     try:
-        result = (log_match.group(6), log_match.group(7))
+        result = ParsedLine(url=log_match.group(6), response_time=log_match.group(7))
     except Exception as e:
         logging.error("error parsing line (no groups):'%s' message:%s", line, e.message)
         raise
@@ -111,7 +107,7 @@ def xread_loglines(filename):
     for line in logfile:
         try:
             parsed = parse_log_line(line.rstrip())
-            yield ParsedLine(*parsed), None
+            yield parsed, None
         except Exception as e:
             yield None, e
 
@@ -153,7 +149,7 @@ def process_logfile(file, report_size=1000):
 
     # TODO: catch if all lines unparsed
     if total_count == 0:
-        logging.error('No lines parsed from %s', file)
+        logging.error('Wrong format. No lines parsed from file %s', file)
         raise Exception('Wrong format')
 
     # pass 2 - calculate aggregates & convert
@@ -178,7 +174,8 @@ def process_logfile(file, report_size=1000):
 
     return stat_list[:report_size]
 
-def render_report(stat_list, template_filename):
+def render_report
+(stat_list, template_filename):
         """
         Render stat into html file.
         Uses REPORT_TEMPLATE from config as page-template
@@ -255,7 +252,6 @@ def process(config):
     #base dir
     base_dir = os.path.dirname(os.path.abspath(__file__))
 
-
     # get log files
     from_datetime = load_last_processed(config['LAST_PROCESSED_FILE'])
 
@@ -264,15 +260,19 @@ def process(config):
         log_files_list = os.listdir(config['LOG_DIR'])
     except Exception as e:
         logging.error('Could not open log-dir %s. message: %s', config['LOG_DIR'], e.message)
+        return False
 
     # get last log file
     target_file, target_date = get_last_log(log_files_list, from_datetime, config['LOG_FILE_PATTERN'])
     if not target_file:
         logging.info('No logfile newer than %s found. Exiting', from_datetime.isoformat())
-        exit()
+        return False
     
     logging.info("Processing logfile: %s" % target_file)
-    stat = process_logfile(os.path.join(config['LOG_DIR'], target_file), int(config['REPORT_SIZE'])) # can have exception
+    try:
+        stat = process_logfile(os.path.join(config['LOG_DIR'], target_file), int(config['REPORT_SIZE']))
+    except Exception as e:
+        return False
 
     report_str = render_report(stat, config['REPORT_TEMPLATE'])
     saved_filename = save_report(report_str, config['REPORT_DIR'], target_date)
@@ -282,21 +282,9 @@ def process(config):
         updated_last_processed = update_last_processed(config['LAST_PROCESSED_FILE'], target_date)
         updated_ts = update_ts_file(config['TS_FILE'])
 
-
+    return True
 
 def main():
-    start_time = datetime.now()
-
-    
-    # options 
-    arg_parser = argparse.ArgumentParser()
-    arg_parser.add_argument('--config', dest='config_file', help='path to config-file')
-    args = arg_parser.parse_args()
-
-    if not args.config_file:
-        print("Starting with default config %s"% start_time.isoformat())
-    else:
-        print("Starting with config '%s' %s" % (args.config_file, start_time.isoformat()))
 
     # default config
     config = {
@@ -309,12 +297,25 @@ def main():
         "LOG_DIR": "./log",
         "LOG_FILE_PATTERN": "nginx-access-ui.log-(\d+).(gz|log)"
     }
-
-    # default config file
     config_filename = '/usr/local/etc/log_analyzer.conf'
+
+    
+    # options 
+    arg_parser = argparse.ArgumentParser()
+    arg_parser.add_argument('--config', dest='config_file', default=None, help='path to config-file')
+    args = arg_parser.parse_args()
+
     if args.config_file:
         config_filename = args.config_file
+
+    # check config file 
+    if not os.path.isfile(config_filename):
+        sys.exit('Could not find config file %s. Exiting' % config_filename)
         
+    print("Started %s" % datetime.now().isoformat())
+    print("Using config: %s" % config_filename)
+
+    # read config         
     fileconfig = ConfigParser.ConfigParser()
     fileconfig.optionxform = str
     try:
@@ -323,7 +324,6 @@ def main():
         config.update(config_loaded)
     except Exception as e:
         sys.exit('Could not process config file %s. Exiting' % config_filename)
-
 
     # logging
     logging_params = {
@@ -344,6 +344,7 @@ def main():
     # process
     process(config)
     
+    logging.info('Processing finished')
     print("Finished %s" % datetime.now().isoformat())
 
 if __name__ == "__main__":

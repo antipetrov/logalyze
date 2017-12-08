@@ -11,44 +11,28 @@
 import os
 import shutil
 import argparse
+import json
 import ConfigParser
 import logging
 import re
+import time
 from datetime import datetime
 from collections import namedtuple
 
 
 from log_processor import LogProcessor
 
-default_config = {
-    "REPORT_SIZE": 1000,
-    "REPORT_DIR": "./reports",
-    "REPORT_TEMPLATE": "./report.html",
-    "PROCESS_LOG": "./log_analyzer.log",
-    "TS_FILE": "./logalize.ts",
-    "LAST_PROCESSED_FILE": "./last_processed.ts",
-    "LOG_DIR": "./log",
-    "LOG_FILE_PATTERN": "nginx-access-ui.log-(\d+).(gz|log)"
-}
-
-LogFile = namedtuple('LogFile', 'filename', 'date')
-ParsedLine = namedtuple('ParsedLine', 'url','response_time', 'parse_error')
 
 
-def load_config():
-    pass
-
-def read_logfile():
-    pass
+ParsedLine = namedtuple('ParsedLine', ('url','response_time'))
 
 
-def get_last_processed(ts_file_path):
+def load_last_processed(ts_file_path):
 
     try:
-        with open(ts_file_path) as ts_file: 
+        with open(ts_file_path, 'r') as ts_file: 
             last_timestamp = int(ts_file.readline())
             last_datetime = datetime.fromtimestamp(last_timestamp)
-
     except Exception as e:
         logging.info('Unable to load last processed timestamp. Using 0')
         last_datetime = datetime.fromtimestamp(0)
@@ -56,12 +40,26 @@ def get_last_processed(ts_file_path):
 
     return last_datetime
 
+def update_last_processed(ts_filename, processed_datetime):
+    timestamp = int(time.mktime(processed_datetime.timetuple()))
+
+    try:
+        with open(ts_filename, 'w') as ts_file:
+            ts_file.write(str(timestamp))
+    except Exception as e:
+        logging.error('Unable to write processing timestamp. Error: %s', e.message)
+        return False
+        
+    
+    return True
+
+
 def get_last_log(file_list, from_datetime, filename_pattern):
     """
     Выбираем все файлы в списке file_list с подходящим форматом имени и у которых 
     дата в имени файла больше чем from_datetime
     """
-    max_date_mark = int(from_datetime.strftime("%Y%m%d"))
+    max_date_mark = from_datetime.strftime("%Y%m%d")
     last_filename = None
 
     for filename in file_list:
@@ -70,10 +68,10 @@ def get_last_log(file_list, from_datetime, filename_pattern):
             fname_date_part = fname_match.group(1)
             if int(fname_date_part) > int(max_date_mark):
                 last_filename = filename
-                max_date_mark = int(fname_date_part)
+                max_date_mark = fname_date_part
 
 
-    max_datetime = datetime.datetime.strptime(max_date_mark, '%Y%m%d')
+    max_datetime = datetime.strptime(max_date_mark, '%Y%m%d')
     return last_filename, max_datetime
 
 def parse_log_line(line):
@@ -98,24 +96,24 @@ def parse_log_line(line):
     return result
 
 
-def xread_logline(file):
+def xread_loglines(filename):
     # open plain or gzip
     import gzip
     try:
         if filename.endswith('.gz'):
-            logfile = gzip.open(filepath)
+            logfile = gzip.open(filename)
         else:
-            logfile = open(filepath)
+            logfile = open(filename)
     except Exception as e:
-        logging.error('Unable to open file %s', file)
+        logging.error('Unable to open file %s', filename)
         raise
 
-    for line in fp:
+    for line in logfile:
         try:
             parsed = parse_log_line(line.rstrip())
-            yield ParsedLine(*parsed, None)
+            yield ParsedLine(*parsed), None
         except Exception as e:
-            yield ParsedLine(None, None, e)
+            yield None, e
 
     logfile.close()
 
@@ -129,26 +127,26 @@ def median(lst):
         return sum(sorted(lst)[n//2-1:n//2+1])/2.0
 
 
-def process_logfile(file):
+def process_logfile(file, report_size=1000):
     total_count = 0
     total_time = 0.0
     line_num = 0
 
     stat = {}
-    for line in xread_loglines(file):
+    for line, parse_error in xread_loglines(file):
         line_num += 1
-        if line.parse_error:
+        if parse_error:
             continue
 
         response_time = float(line.response_time)        
-        current_stat = stat.get(uri, {'count':0, 'time_sum': 0.0, 'time_max':0.0, 'time_list':[]})
+        current_stat = stat.get(line.url, {'count':0, 'time_sum': 0.0, 'time_max':0.0, 'time_list':[]})
 
         current_stat['count'] = current_stat['count'] + 1
         current_stat['time_sum'] = current_stat['time_sum'] + response_time
         current_stat['time_max'] = current_stat['time_max'] if response_time <= current_stat['time_sum'] else response_time
         current_stat['time_list'].append(response_time)
         
-        stat[uri] = current_stat
+        stat[line.url] = current_stat
         
         total_count += 1
         total_time += response_time
@@ -159,7 +157,7 @@ def process_logfile(file):
         raise Exception('Wrong format')
 
     # pass 2 - calculate aggregates & convert
-    loging.info("Calculating aggregates on total %d lines",line_num)
+    logging.info("Calculating aggregates on total %d lines",line_num)
 
     stat_list = []
     for url,  data in stat.iteritems():
@@ -178,11 +176,9 @@ def process_logfile(file):
     import operator
     stat_list.sort(key=operator.itemgetter('time_avg'), reverse=True)
 
-    max_lines = int(self.config.get('REPORT_SIZE', 1000))
+    return stat_list[:report_size]
 
-    return stat_list[:max_lines], date_processed
-
-def render_report(stat_list, template_file):
+def render_report(stat_list, template_filename):
         """
         Render stat into html file.
         Uses REPORT_TEMPLATE from config as page-template
@@ -211,36 +207,33 @@ def render_report(stat_list, template_file):
 
         stat_json = json.dumps(stat_rows)
 
-        report_template_filename = self.config.get("REPORT_TEMPLATE", None)    
-        
         try:
-            ftemp = open(report_template_filename, "r")
-            template = "".join(ftemp.readlines())
+            with open(template_filename, "r") as ftemp:
+                template = "".join(ftemp.readlines())
         except Exception as e:
-            log.error('Failed to read report template file "%s": %s', (report_template_filename, e.message))
+            logging.error('Failed to read report template file "%s": %s', template_filename, e.message)
             return None
 
         report_str = template.replace('$table_json', stat_json)
-        ftemp.close()
-
-
         return report_str  
 
 def save_report(report_str, report_dir, report_date):
     report_tmp_filename = "./report.tmp"
     try:
         with open(report_tmp_filename, 'w') as freport:
-            frep.write(report_str)
+            freport.write(report_str)
     except Exception as e:
         logging.error('Failed to write report to file: %s', e.message)
         return None
 
     try:
         report_filename = os.path.join(report_dir, "report_%s.html"%datetime.strftime(report_date, "%Y.%m.%d"))
-        shutils.copyfile(report_tmp_filename, report_filename)
+        shutil.copyfile(report_tmp_filename, report_filename)
     except Exception as e:
         logging.error('Failed to write report to destination: %s', e.message)
-        return None        
+        return None
+
+    os.remove(report_tmp_filename)
 
     return report_filename
 
@@ -249,9 +242,8 @@ def update_ts_file(ts_filename):
     timestamp = int(time.mktime(datetime.now().timetuple()))
     
     try:
-        fp = open(ts_filename, 'w')
-        fp.write(str(timestamp))
-        fp.close()
+        with open(ts_filename, 'w') as ts_file:
+            ts_file.write(str(timestamp))
     except Exception as e:
         log.error('Unable to update ts file "%s": %s', ts_filename, e.message)
         return False
@@ -260,8 +252,13 @@ def update_ts_file(ts_filename):
 
 
 def process(config):
+    #base dir
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+
+
     # get log files
-    from_datetime = get_last_processed(config['LAST_PROCESSED_FILE'])
+    from_datetime = load_last_processed(config['LAST_PROCESSED_FILE'])
+
     logging.info('Trying to fing log-files newer than: %s' % from_datetime.isoformat())
     try:
         log_files_list = os.listdir(config['LOG_DIR'])
@@ -275,18 +272,15 @@ def process(config):
         exit()
     
     logging.info("Processing logfile: %s" % target_file)
-    stat = process_logfile(target_file) # can have exception
+    stat = process_logfile(os.path.join(config['LOG_DIR'], target_file), int(config['REPORT_SIZE'])) # can have exception
 
-    report_str = render_report(stat, config['TEMPLATE_FILE'])
+    report_str = render_report(stat, config['REPORT_TEMPLATE'])
     saved_filename = save_report(report_str, config['REPORT_DIR'], target_date)
     print("report file: %s" % saved_filename)
 
     if saved_filename:
-        update_last_processed(config['LAST_PROCESSED_FILE'], target_date)
-        update_ts(config['TS_FILE'], datetime.now())
-
-
-
+        updated_last_processed = update_last_processed(config['LAST_PROCESSED_FILE'], target_date)
+        updated_ts = update_ts_file(config['TS_FILE'])
 
 
 
@@ -304,14 +298,32 @@ def main():
     else:
         print("Starting with config '%s' %s" % (args.config_file, start_time.isoformat()))
 
-    config = default_config
+    # default config
+    config = {
+        "REPORT_SIZE": 1000,
+        "REPORT_DIR": "./reports",
+        "REPORT_TEMPLATE": "./report.html",
+        "PROCESS_LOG": "./log_analyzer.log",
+        "TS_FILE": "./log_analyzer.ts",
+        "LAST_PROCESSED_FILE": "./last_processed.ts",
+        "LOG_DIR": "./log",
+        "LOG_FILE_PATTERN": "nginx-access-ui.log-(\d+).(gz|log)"
+    }
 
+    # default config file
+    config_filename = '/usr/local/etc/log_analyzer.conf'
     if args.config_file:
-        fileconfig = ConfigParser.ConfigParser()
-        fileconfig.optionxform = str
-        fileconfig.read('default.conf')
+        config_filename = args.config_file
+        
+    fileconfig = ConfigParser.ConfigParser()
+    fileconfig.optionxform = str
+    try:
+        fileconfig.read(config_filename)
         config_loaded = dict(fileconfig.defaults())
         config.update(config_loaded)
+    except Exception as e:
+        sys.exit('Could not process config file %s. Exiting' % config_filename)
+
 
     # logging
     logging_params = {
@@ -330,7 +342,7 @@ def main():
     logging.info('Processing started')
 
     # process
-    process(conig)
+    process(config)
     
     print("Finished %s" % datetime.now().isoformat())
 

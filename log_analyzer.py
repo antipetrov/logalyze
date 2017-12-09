@@ -7,11 +7,11 @@
 #                     '"$http_user_agent" "$http_x_forwarded_for" "$http_X_REQUEST_ID" "$http_X_RB_USER" '
 #                     '$request_time';
 
-
+import argparse
 import os
 import sys
 import shutil
-import argparse
+import gzip
 import json
 import ConfigParser
 import logging
@@ -21,41 +21,46 @@ from datetime import datetime
 from collections import namedtuple
 
 ParsedLine = namedtuple('ParsedLine', ('url','response_time'))
+LogfileData = namedtuple('LogfileData', ('filename', 'date'))
 
 
-def load_last_processed(ts_file_path):
+def init_config(config_file):
 
-    try:
-        with open(ts_file_path, 'r') as ts_file: 
-            last_timestamp = int(ts_file.readline())
-            last_datetime = datetime.fromtimestamp(last_timestamp)
-    except Exception as e:
-        logging.info('Unable to load last processed timestamp. Using 0')
-        last_datetime = datetime.fromtimestamp(0)
-    
+    # default config
+    config = {
+        "REPORT_SIZE": 1000,
+        "REPORT_DIR": "./reports",
+        "REPORT_TEMPLATE": "./report.html",
+        "PROCESS_LOG": "./log_analyzer.log",
+        "TS_FILE": "./log_analyzer.ts",
+        "LAST_PROCESSED_FILE": "./last_processed.ts",
+        "LOG_DIR": "./log",
+        "LOG_FILE_PATTERN": "nginx-access-ui.log-(\d+).(gz|log)"
+    }
 
-    return last_datetime
-
-def update_last_processed(ts_filename, processed_datetime):
-    timestamp = int(time.mktime(processed_datetime.timetuple()))
-
-    try:
-        with open(ts_filename, 'w') as ts_file:
-            ts_file.write(str(timestamp))
-    except Exception as e:
-        logging.error('Unable to write processing timestamp. Error: %s', e.message)
+    # check config file 
+    if not os.path.isfile(config_filename):
+        print('Could not find config file %s. Exiting' % config_filename)
         return False
-        
     
-    return True
+    # read-update config         
+    fileconfig = ConfigParser.ConfigParser()
+    fileconfig.optionxform = str
+    try:
+        fileconfig.read(config_filename)
+        config_loaded = dict(fileconfig.defaults())
+        config.update(config_loaded)
+    except ConfigParser.Error as e:
+        return False
 
+    return config
 
-def get_last_log(file_list, from_datetime, filename_pattern):
+def get_last_log(file_list, filename_pattern):
     """
-    Выбираем все файлы в списке file_list с подходящим форматом имени и у которых 
-    дата в имени файла больше чем from_datetime
+    Выбираем самый поздний файл в списке file_list с подходящим форматом имени
+    Дату берем из имени файла
     """
-    max_date_mark = from_datetime.strftime("%Y%m%d")
+    max_date_mark = 0
     last_filename = None
 
     for filename in file_list:
@@ -66,9 +71,8 @@ def get_last_log(file_list, from_datetime, filename_pattern):
                 last_filename = filename
                 max_date_mark = fname_date_part
 
-
     max_datetime = datetime.strptime(max_date_mark, '%Y%m%d')
-    return last_filename, max_datetime
+    return LogfileData(filename=last_filename, date=max_datetime)
 
 def parse_log_line(line):
     """
@@ -174,8 +178,7 @@ def process_logfile(file, report_size=1000):
 
     return stat_list[:report_size]
 
-def render_report
-(stat_list, template_filename):
+def render_report(stat_list, template_filename):
         """
         Render stat into html file.
         Uses REPORT_TEMPLATE from config as page-template
@@ -214,7 +217,11 @@ def render_report
         report_str = template.replace('$table_json', stat_json)
         return report_str  
 
-def save_report(report_str, report_dir, report_date):
+def get_report_filename(report_dir, report_datetime):
+    return os.path.join(report_dir, "report_%s.html"%datetime.strftime(report_datetime, "%Y.%m.%d"))
+        
+
+def save_report(report_str, report_filename, report_date):
     report_tmp_filename = "./report.tmp"
     try:
         with open(report_tmp_filename, 'w') as freport:
@@ -224,7 +231,6 @@ def save_report(report_str, report_dir, report_date):
         return None
 
     try:
-        report_filename = os.path.join(report_dir, "report_%s.html"%datetime.strftime(report_date, "%Y.%m.%d"))
         shutil.copyfile(report_tmp_filename, report_filename)
     except Exception as e:
         logging.error('Failed to write report to destination: %s', e.message)
@@ -253,9 +259,8 @@ def process(config):
     base_dir = os.path.dirname(os.path.abspath(__file__))
 
     # get log files
-    from_datetime = load_last_processed(config['LAST_PROCESSED_FILE'])
+    # from_datetime = load_last_processed(config['LAST_PROCESSED_FILE'])
 
-    logging.info('Trying to fing log-files newer than: %s' % from_datetime.isoformat())
     try:
         log_files_list = os.listdir(config['LOG_DIR'])
     except Exception as e:
@@ -263,68 +268,45 @@ def process(config):
         return False
 
     # get last log file
-    target_file, target_date = get_last_log(log_files_list, from_datetime, config['LOG_FILE_PATTERN'])
-    if not target_file:
-        logging.info('No logfile newer than %s found. Exiting', from_datetime.isoformat())
+    target_logfile_data = get_last_log(log_files_list, config['LOG_FILE_PATTERN'])
+    if not target_logfile_data:
+        logging.info('No logfile found. Exiting')
+        return False
+
+    # create report filename
+    report_filename = get_report_filename(config['REPORT_DIR'], target_logfile_data.date)
+
+    # check if report exists
+    if os.path.isfile(report_filename):
+        logging.info("Report for %s already exists. Exiting", target_logfile_data.date.isoformat())
         return False
     
-    logging.info("Processing logfile: %s" % target_file)
+    logging.info("Processing logfile: %s" % target_logfile_data.filename)
     try:
-        stat = process_logfile(os.path.join(config['LOG_DIR'], target_file), int(config['REPORT_SIZE']))
+        stat = process_logfile(os.path.join(config['LOG_DIR'], target_logfile_data.filename), int(config['REPORT_SIZE']))
     except Exception as e:
         return False
 
     report_str = render_report(stat, config['REPORT_TEMPLATE'])
-    saved_filename = save_report(report_str, config['REPORT_DIR'], target_date)
+    saved_filename = save_report(report_str, report_filename)
     print("report file: %s" % saved_filename)
 
     if saved_filename:
-        updated_last_processed = update_last_processed(config['LAST_PROCESSED_FILE'], target_date)
         updated_ts = update_ts_file(config['TS_FILE'])
 
     return True
 
 def main():
 
-    # default config
-    config = {
-        "REPORT_SIZE": 1000,
-        "REPORT_DIR": "./reports",
-        "REPORT_TEMPLATE": "./report.html",
-        "PROCESS_LOG": "./log_analyzer.log",
-        "TS_FILE": "./log_analyzer.ts",
-        "LAST_PROCESSED_FILE": "./last_processed.ts",
-        "LOG_DIR": "./log",
-        "LOG_FILE_PATTERN": "nginx-access-ui.log-(\d+).(gz|log)"
-    }
-    config_filename = '/usr/local/etc/log_analyzer.conf'
-
-    
     # options 
     arg_parser = argparse.ArgumentParser()
-    arg_parser.add_argument('--config', dest='config_file', default=None, help='path to config-file')
+    arg_parser.add_argument('--config', dest='config_file', default='/usr/local/etc/log_analyzer.conf', help='path to config-file')
     args = arg_parser.parse_args()
 
-    if args.config_file:
-        config_filename = args.config_file
+    config = init_config(args.config_file)
 
-    # check config file 
-    if not os.path.isfile(config_filename):
-        sys.exit('Could not find config file %s. Exiting' % config_filename)
-        
     print("Started %s" % datetime.now().isoformat())
-    print("Using config: %s" % config_filename)
-
-    # read config         
-    fileconfig = ConfigParser.ConfigParser()
-    fileconfig.optionxform = str
-    try:
-        fileconfig.read(config_filename)
-        config_loaded = dict(fileconfig.defaults())
-        config.update(config_loaded)
-    except Exception as e:
-        sys.exit('Could not process config file %s. Exiting' % config_filename)
-
+    
     # logging
     logging_params = {
         'format':'[%(asctime)s] %(levelname).1s %(message)s', 
@@ -336,13 +318,16 @@ def main():
     if log_path:
         print('Process log: %s'%os.path.abspath(log_path))
         logging_params['filename'] = log_path
-    else:
-        print('Process log: stdout' )
+
     logging.basicConfig(**logging_params)
     logging.info('Processing started')
 
     # process
-    process(config)
+    try:
+        process(config)
+    except Exception as e:
+        logging.error('Unknown error: %s', e.message)
+        sys.exit()
     
     logging.info('Processing finished')
     print("Finished %s" % datetime.now().isoformat())

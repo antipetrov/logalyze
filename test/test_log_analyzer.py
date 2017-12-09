@@ -92,11 +92,12 @@ class LogAnalyzerCase(unittest.TestCase):
         logging.basicConfig(**logging_params)
         logging.info('Processing started')
     
+        os.remove(config['REPORT_DIR'])
 
-        try:
-            os.remove(config['LAST_PROCESSED_FILE'])
-        except OSError as e:
-            pass
+        # try:
+        #     os.remove(old_report_filename)
+        # except OSError as e:
+        #     pass
 
         # run full process on test sample file
         process(config)
@@ -105,10 +106,10 @@ class LogAnalyzerCase(unittest.TestCase):
         with open(config['TS_FILE']) as ts_file:
             tstamp = int(ts_file.readline())
 
-        self.assertEqual(os.path.getmtime(config['TS_FILE']), tstamp)
+        self.assertEqual(int(os.path.getmtime(config['TS_FILE'])), tstamp)
 
         # check repeat run
-        process(config)
+        # process(config)
 
 if __name__ == '__main__':
     unittest.main()

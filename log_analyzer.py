@@ -221,13 +221,13 @@ def get_report_filename(report_dir, report_datetime):
     return os.path.join(report_dir, "report_%s.html"%datetime.strftime(report_datetime, "%Y.%m.%d"))
         
 
-def save_report(report_str, report_filename, report_date):
+def save_report(report_str, report_filename):
     report_tmp_filename = "./report.tmp"
     try:
         with open(report_tmp_filename, 'w') as freport:
             freport.write(report_str)
     except Exception as e:
-        logging.error('Failed to write report to file: %s', e.message)
+        logging.error('Failed to write report to tmp-file: %s', e.message)
         return None
 
     try:
@@ -237,8 +237,7 @@ def save_report(report_str, report_filename, report_date):
         return None
 
     os.remove(report_tmp_filename)
-
-    return report_filename
+    return True
 
 
 def update_ts_file(ts_filename):
@@ -288,10 +287,10 @@ def process(config):
         return False
 
     report_str = render_report(stat, config['REPORT_TEMPLATE'])
-    saved_filename = save_report(report_str, report_filename)
-    print("report file: %s" % saved_filename)
+    saved = save_report(report_str, report_filename)
+    print("report file: %s" % report_filename)
 
-    if saved_filename:
+    if saved:
         updated_ts = update_ts_file(config['TS_FILE'])
 
     return True

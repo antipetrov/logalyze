@@ -11,6 +11,8 @@ import unittest
 import sys
 import os
 import time
+import glob
+
 from datetime import datetime, date, time
 
 sys.path.insert(0,(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -68,6 +70,7 @@ class LogAnalyzerCase(unittest.TestCase):
         pos = report_str.find('/banners/26362895/switch_status/?status=delete&_=1498748952071')
         self.assertNotEqual(pos, -1)
 
+
     def test_full_process(self):
         config = {
             "REPORT_SIZE": 1000,
@@ -92,15 +95,13 @@ class LogAnalyzerCase(unittest.TestCase):
         logging.basicConfig(**logging_params)
         logging.info('Processing started')
     
-        os.remove(config['REPORT_DIR'])
-
-        # try:
-        #     os.remove(old_report_filename)
-        # except OSError as e:
-        #     pass
+        report_files = glob.glob('%s/*'% os.path.abspath(config['REPORT_DIR']))
+        for f in report_files:
+            os.remove(f)
 
         # run full process on test sample file
-        process(config)
+        processed = process(config)
+        self.assertEqual(True, processed)
 
         # check ts-file
         with open(config['TS_FILE']) as ts_file:
@@ -108,8 +109,25 @@ class LogAnalyzerCase(unittest.TestCase):
 
         self.assertEqual(int(os.path.getmtime(config['TS_FILE'])), tstamp)
 
-        # check repeat run
-        # process(config)
+
+    def test_repeat_process(self):
+        config = {
+            "REPORT_SIZE": 1000,
+            "REPORT_DIR": "./test/reports",
+            "REPORT_TEMPLATE": "./report.html",
+            "PROCESS_LOG": "./test/test.log",
+            "TS_FILE": "./test/test.ts",
+            "LOG_DIR": "./test/log",
+            "LOG_FILE_PATTERN": "nginx-access-ui.log-(\d+).(gz|log)",
+            "LAST_PROCESSED_FILE": "./test/last_processed.ts",
+        }
+
+        with open(os.path.join(config['REPORT_DIR'], 'report_2017.07.11.html'), 'w') as old_report:
+            old_report.write('-')
+
+        processed = process(config)
+        self.assertEqual(False, processed)
+
 
 if __name__ == '__main__':
     unittest.main()

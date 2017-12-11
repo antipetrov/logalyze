@@ -35,7 +35,8 @@ def init_config(config_file):
         "TS_FILE": "./log_analyzer.ts",
         "LAST_PROCESSED_FILE": "./last_processed.ts",
         "LOG_DIR": "./log",
-        "LOG_FILE_PATTERN": "nginx-access-ui.log-(\d+).(gz|log)"
+        "LOG_FILE_PATTERN": "nginx-access-ui.log-(\d+).(gz|log)",
+        "PARSE_ERROR_PERC_MAX":0.2
     }
 
     # check config file 
@@ -110,8 +111,11 @@ def xread_loglines(filename):
 
     for line in logfile:
         try:
+            pline = line.decode('utf-8')
             parsed = parse_log_line(line.rstrip())
             yield parsed, None
+        except UnicodeDecodeError as e:
+            yield None, e
         except Exception as e:
             yield None, e
 
@@ -127,14 +131,14 @@ def median(lst):
         return sum(sorted(lst)[n//2-1:n//2+1])/2.0
 
 
-def process_logfile(file, report_size=1000):
-    total_count = 0
+def process_logfile(log_lines, report_size=1000, parse_error_perc_max=0.0):
+    line_count = 0
+    parsed_count = 0
     total_time = 0.0
-    line_num = 0
-
+    
     stat = {}
-    for line, parse_error in xread_loglines(file):
-        line_num += 1
+    for line, parse_error in log_lines:
+        line_count += 1
         if parse_error:
             continue
 
@@ -148,16 +152,16 @@ def process_logfile(file, report_size=1000):
         
         stat[line.url] = current_stat
         
-        total_count += 1
+        parsed_count += 1
         total_time += response_time
 
-    # TODO: catch if all lines unparsed
-    if total_count == 0:
-        logging.error('Wrong format. No lines parsed from file %s', file)
+    # проверяем чтобы процент ощибочных строк был не больше максимума
+    if float(parsed_count)/line_count < (1.0 - parse_error_perc_max):
+        logging.error('Wrong format. %d of %d lines parsed', parsed_count, line_count)
         raise Exception('Wrong format')
 
     # pass 2 - calculate aggregates & convert
-    logging.info("Calculating aggregates on total %d lines",line_num)
+    logging.info("Calculating aggregates on total %d lines",parsed_count)
 
     stat_list = []
     for url,  data in stat.iteritems():
@@ -169,7 +173,7 @@ def process_logfile(file, report_size=1000):
             'time_avg':data['time_sum']/data['count'],
             'time_med':median(data['time_list']), 
             'time_perc':data['time_sum']/total_time,
-            'count_perc':float(data['count'])/total_count,
+            'count_perc':float(data['count'])/parsed_count,
             })
 
     # sort it
@@ -281,9 +285,15 @@ def process(config):
         return False
     
     logging.info("Processing logfile: %s" % target_logfile_data.filename)
+    log_path = os.path.join(config['LOG_DIR'], target_logfile_data.filename)
     try:
-        stat = process_logfile(os.path.join(config['LOG_DIR'], target_logfile_data.filename), int(config['REPORT_SIZE']))
+        stat = process_logfile(
+            log_lines=xread_loglines(log_path), 
+            report_size=int(config['REPORT_SIZE']), 
+            parse_error_perc_max = config.get('PARSE_ERROR_PERC_MAX', 0.2)
+            )
     except Exception as e:
+        logging.error('Processing failed: %s', e.message)
         return False
 
     report_str = render_report(stat, config['REPORT_TEMPLATE'])
@@ -325,7 +335,7 @@ def main():
     try:
         process(config)
     except Exception as e:
-        logging.error('Unknown error: %s', e.message)
+        logging.error('Processing error: %s', e.message)
         sys.exit()
     
     logging.info('Processing finished')

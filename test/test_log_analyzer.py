@@ -47,6 +47,17 @@ class LogAnalyzerCase(unittest.TestCase):
         parsed_line = parse_log_line(line)
 
 
+    def test_line_wrong_format(self):
+        stat = [{'count': 1, 'time_avg': 1.631, 'time_max': 0.0, 'time_sum': 1.631, 'url': '/banners/26362895/switch_status/?status=delete&_=1498748952071', 'time_med': 1.631, 'time_perc': 8.461522660694406e-07, 'count_perc': 3.826014295519814e-07}, 
+                {'count': 1, 'time_avg': 0.046, 'time_max': 0.0, 'time_sum': 0.046, 'url': '/accounts/login/?next=/agency/campaigns/%3Fsearch%3D%25D1%2581%25D0%25BE%25D1%2582%25D0%25B0%26activity%3Dactive', 'time_med': 0.046, 'time_perc': 2.386450290569851e-08, 'count_perc': 3.826014295519814e-07}, 
+                {'count': 13, 'time_avg': 0.043461538461538454, 'time_max': 0.0, 'time_sum': 0.565, 'url': '/api/v2/banner/26751035/statistic/?date_from=2017-06-29&date_to=2017-06-29', 'time_med': 0.043, 'time_perc': 2.9311835090694906e-07, 'count_perc': 4.973818584175758e-06}, {'count': 1, 'time_avg': 0.072, 'time_max': 0.0, 'time_sum': 0.072, 'url': '/api/v2/banner/25918447/statistic/outgoings/?date_from=2017-06-28&date_to=2017-06-28', 'time_med': 0.072, 'time_perc': 3.7353134982832446e-08, 'count_perc': 3.826014295519814e-07}, 
+                {'count': 2, 'time_avg': 0.5065, 'time_max': 0.0, 'time_sum': 1.013, 'url': '/api/v2/banner/17096340/', 'time_med': 0.5065, 'time_perc': 5.255378574667954e-07, 'count_perc': 7.652028591039628e-07}, {'count': 1, 'time_avg': 0.076, 'time_max': 0.0, 'time_sum': 0.076, 'url': '/api/v2/internal/banner/24324264/info', 'time_med': 0.076, 'time_perc': 3.942830914854536e-08, 'count_perc': 3.826014295519814e-07}, 
+                {'count': 1, 'time_avg': 3.724, 'time_max': 0.0, 'time_sum': 3.724, 'url': '/ads/campaigns/7863032/gpmd/event_statistic/?date1=29-06-2017&date2=29-06-2017&date_type=day&puid1=&puid2=&puid3=', 'time_med': 3.724, 'time_perc': 1.931987148278723e-06, 'count_perc': 3.826014295519814e-07}]
+
+        
+        
+
+
     def test_stat(self):
         stat = [{'count': 1, 'time_avg': 1.631, 'time_max': 0.0, 'time_sum': 1.631, 'url': '/banners/26362895/switch_status/?status=delete&_=1498748952071', 'time_med': 1.631, 'time_perc': 8.461522660694406e-07, 'count_perc': 3.826014295519814e-07}, 
                 {'count': 1, 'time_avg': 0.046, 'time_max': 0.0, 'time_sum': 0.046, 'url': '/accounts/login/?next=/agency/campaigns/%3Fsearch%3D%25D1%2581%25D0%25BE%25D1%2582%25D0%25B0%26activity%3Dactive', 'time_med': 0.046, 'time_perc': 2.386450290569851e-08, 'count_perc': 3.826014295519814e-07}, 
@@ -127,6 +138,9 @@ class LogAnalyzerCase(unittest.TestCase):
 
         processed = process(config)
         self.assertEqual(False, processed)
+
+    def test_total_parse_errors(self):
+        pass
 
 
 if __name__ == '__main__':

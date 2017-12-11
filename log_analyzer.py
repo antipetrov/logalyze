@@ -317,20 +317,14 @@ def main():
     print("Started %s" % datetime.now().isoformat())
     
     # logging
-    logging_params = {
-        'format':'[%(asctime)s] %(levelname).1s %(message)s', 
-        'datefmt':'%Y.%m.%d %H:%M:%S',
-        'level':logging.INFO
-        }
-
-    log_path = config.get("PROCESS_LOG", None)
-    if log_path:
-        print('Process log: %s'%os.path.abspath(log_path))
-        logging_params['filename'] = log_path
-
-    logging.basicConfig(**logging_params)
+    logging.basicConfig(
+        format='[%(asctime)s] %(levelname).1s %(message)s', 
+        datefmt='%Y.%m.%d %H:%M:%S',
+        level=logging.INFO,
+        filename=config.get("PROCESS_LOG", None)
+        )
+    
     logging.info('Processing started')
-
     # process
     try:
         process(config)

@@ -25,6 +25,8 @@ PROCESS_LOG = ./process.log
 * LOG_DIR - папка с логами для обрабртки
 * LOG_FILE_PATTERN - паттерн для имени файла лога - первая группа = дата файла в формате %Y%m%d
 * PROCESS_LOG - файл лога скрипта (если не указан - лог выводится в stdout)
+* PROCESS_LOG - файл лога скрипта (если не указан - лог выводится в stdout)
+* PARSE_ERROR_PERC_MAX - максимальный процент не-разобранных строк (по-умолчанию =0.2)
 
 ## Запуск скрипта
 `python log_analyzer.py [-h] [--config CONFIG_FILE]`

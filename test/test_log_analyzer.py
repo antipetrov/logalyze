@@ -54,7 +54,7 @@ class LogAnalyzerCase(unittest.TestCase):
                 {'count': 2, 'time_avg': 0.5065, 'time_max': 0.0, 'time_sum': 1.013, 'url': '/api/v2/banner/17096340/', 'time_med': 0.5065, 'time_perc': 5.255378574667954e-07, 'count_perc': 7.652028591039628e-07}, {'count': 1, 'time_avg': 0.076, 'time_max': 0.0, 'time_sum': 0.076, 'url': '/api/v2/internal/banner/24324264/info', 'time_med': 0.076, 'time_perc': 3.942830914854536e-08, 'count_perc': 3.826014295519814e-07}, 
                 {'count': 1, 'time_avg': 3.724, 'time_max': 0.0, 'time_sum': 3.724, 'url': '/ads/campaigns/7863032/gpmd/event_statistic/?date1=29-06-2017&date2=29-06-2017&date_type=day&puid1=&puid2=&puid3=', 'time_med': 3.724, 'time_perc': 1.931987148278723e-06, 'count_perc': 3.826014295519814e-07}]
 
-        
+
         
 
 
@@ -119,6 +119,29 @@ class LogAnalyzerCase(unittest.TestCase):
             tstamp = int(ts_file.readline())
 
         self.assertEqual(int(os.path.getmtime(config['TS_FILE'])), tstamp)
+
+    def test_error_percent(self):
+        config = {
+            "REPORT_SIZE": 1000,
+            "REPORT_DIR": "./test/reports",
+            "REPORT_TEMPLATE": "./report.html",
+            "PROCESS_LOG": "./test/test.log",
+            "TS_FILE": "./test/test.ts",
+            "LOG_DIR": "./test/log",
+            "LOG_FILE_PATTERN": "nginx-access-ui.log-(\d+).(gz|log)",
+            "LAST_PROCESSED_FILE": "./test/last_processed.ts",
+        }
+        parsed_lines = [
+            (ParsedLine(url=None, response_time=0), Exception()),
+            (ParsedLine(url=None, response_time=0), Exception()),
+            (ParsedLine(url=None, response_time=0), Exception()),
+            (ParsedLine(url='/api/v2/banner/25949683', response_time=5.0), None)
+        ]
+  
+        with self.assertRaises(Exception):
+            processed = process_logfile(parsed_lines, 1000, 0.2)
+
+        # self.assertEqual(False, processed)
 
 
     def test_repeat_process(self):

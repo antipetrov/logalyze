@@ -159,7 +159,7 @@ def process_logfile(log_lines, report_size=1000, parse_error_perc_max=0.0):
     # проверяем чтобы процент ощибочных строк был не больше максимума
     # 
     if float(parsed_count)/line_count < (1.0 - parse_error_perc_max):
-        logging.error('Wrong format. %d of %d lines parsed. More than %d of errors - failed parsing', parsed_count, line_count, int(parse_error_perc_max*100))
+        logging.error('Wrong format. %d of %d lines parsed. More than %d%% of errors - failed parsing', parsed_count, line_count, int(parse_error_perc_max*100))
         raise Exception('Wrong format')
 
     # pass 2 - calculate aggregates & convert

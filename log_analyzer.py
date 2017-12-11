@@ -24,7 +24,7 @@ ParsedLine = namedtuple('ParsedLine', ('url','response_time'))
 LogfileData = namedtuple('LogfileData', ('filename', 'date'))
 
 
-def init_config(config_file):
+def init_config(config_filename):
 
     # default config
     config = {
@@ -52,6 +52,7 @@ def init_config(config_file):
         config_loaded = dict(fileconfig.defaults())
         config.update(config_loaded)
     except ConfigParser.Error as e:
+        print('Could parse config file %s. Exiting' % config_filename)
         return False
 
     return config
@@ -156,8 +157,9 @@ def process_logfile(log_lines, report_size=1000, parse_error_perc_max=0.0):
         total_time += response_time
 
     # проверяем чтобы процент ощибочных строк был не больше максимума
+    # 
     if float(parsed_count)/line_count < (1.0 - parse_error_perc_max):
-        logging.error('Wrong format. %d of %d lines parsed', parsed_count, line_count)
+        logging.error('Wrong format. %d of %d lines parsed. More than %d of errors - failed parsing', parsed_count, line_count, int(parse_error_perc_max*100))
         raise Exception('Wrong format')
 
     # pass 2 - calculate aggregates & convert
@@ -313,6 +315,8 @@ def main():
     args = arg_parser.parse_args()
 
     config = init_config(args.config_file)
+    if not config:
+        sys.exit()
 
     print("Started %s" % datetime.now().isoformat())
     

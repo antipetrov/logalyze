@@ -14,7 +14,8 @@ REPORT_TEMPLATE=./report.html
 TS_FILE=./logalize.ts
 LOG_DIR=./log
 LOG_FILE_PATTERN=nginx-access-ui.log-(\d+).(gz|log)
-PROCESS_LOG = ./process.log
+PROCESS_LOG = ./log_analyzer.log
+PARSE_ERROR_PERC_MAX = 0.2
 ```
 
 Где 
@@ -37,3 +38,8 @@ PROCESS_LOG = ./process.log
 ## Запуск тестов
 python -m unittest test_log_analyzer.py
 
+## Кодировка логов
+Предполагается что кодировка исходных файлов - UTF-8. Другая кодировка - не предполагается.
+
+## Повторный запуск
+Для повторной генерации отчета нужно вручную удалить файл отчета.

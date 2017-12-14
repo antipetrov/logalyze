@@ -1,26 +1,21 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-
-# log_format ui_short '$remote_addr $remote_user $http_x_real_ip [$time_local] "$request" '
-#                     '$status $body_bytes_sent "$http_referer" '
-#                     '"$http_user_agent" "$http_x_forwarded_for" "$http_X_REQUEST_ID" "$http_X_RB_USER" '
-#                     '$request_time';
-
-import argparse
 import os
 import sys
-import shutil
-import gzip
+import argparse
 import json
-import ConfigParser
+import gzip
+import shutil
 import logging
 import re
 import time
+import ConfigParser
+
 from datetime import datetime
 from collections import namedtuple
 
-ParsedLine = namedtuple('ParsedLine', ('url','response_time'))
+ParsedLine = namedtuple('ParsedLine', ('url', 'response_time'))
 LogfileData = namedtuple('LogfileData', ('filename', 'date'))
 
 
@@ -36,15 +31,15 @@ def init_config(config_filename):
         "LAST_PROCESSED_FILE": "./last_processed.ts",
         "LOG_DIR": "./log",
         "LOG_FILE_PATTERN": "nginx-access-ui.log-(\d+).(gz|log)",
-        "PARSE_ERROR_PERC_MAX":0.2
+        "PARSE_ERROR_PERC_MAX": 0.2
     }
 
-    # check config file 
+    # check config file
     if not os.path.isfile(config_filename):
         print('Could not find config file %s. Exiting' % config_filename)
         return False
-    
-    # read-update config         
+
+    # read-update config
     fileconfig = ConfigParser.ConfigParser()
     fileconfig.optionxform = str
     try:
@@ -52,10 +47,12 @@ def init_config(config_filename):
         config_loaded = dict(fileconfig.defaults())
         config.update(config_loaded)
     except ConfigParser.Error as e:
-        print('Could parse config file %s. Exiting' % config_filename)
+        print('Could parse config file %s. Error: %s. Exiting' %
+              (config_filename, e.message))
         return False
 
     return config
+
 
 def get_last_log(file_list, filename_pattern):
     """
@@ -76,23 +73,27 @@ def get_last_log(file_list, filename_pattern):
     max_datetime = datetime.strptime(max_date_mark, '%Y%m%d')
     return LogfileData(filename=last_filename, date=max_datetime)
 
+
 def parse_log_line(line):
     """
     process single log line
 
     return tuple(url, response_time)
     """
-    pattern = '([0-9.]+) (.*) (.*) \[(.*)\] \"(\S+) ([^"]+) HTTP[^"]*\" .* ([0-9.]+)$'
+    pattern = ('([0-9.]+) (.*) (.*) \[(.*)\] \"(\S+) ([^"]+) HTTP[^"]*\" .* '
+               '([0-9.]+)$')
     try:
         log_match = re.match(pattern, line)
     except Exception as e:
         logging.error("error parsing line:'%s' message:%s", line, e.message)
-        raise    
+        raise
 
     try:
-        result = ParsedLine(url=log_match.group(6), response_time=log_match.group(7))
+        result = ParsedLine(url=log_match.group(
+            6), response_time=log_match.group(7))
     except Exception as e:
-        logging.error("error parsing line (no groups):'%s' message:%s", line, e.message)
+        logging.error(
+            "error parsing line (no groups):'%s' message:%s", line, e.message)
         raise
 
     return result
@@ -100,7 +101,6 @@ def parse_log_line(line):
 
 def xread_loglines(filename):
     # open plain or gzip
-    import gzip
     try:
         if filename.endswith('.gz'):
             logfile = gzip.open(filename)
@@ -112,8 +112,7 @@ def xread_loglines(filename):
 
     for line in logfile:
         try:
-            pline = line.decode('utf-8')
-            parsed = parse_log_line(line.rstrip())
+            parsed = parse_log_line(line.decode('utf-8').rstrip())
             yield parsed, None
         except UnicodeDecodeError as e:
             yield None, e
@@ -122,61 +121,70 @@ def xread_loglines(filename):
 
     logfile.close()
 
+
 def median(lst):
     n = len(lst)
     if n < 1:
         return None
     if n % 2 == 1:
-        return sorted(lst)[n//2]
+        return sorted(lst)[n // 2]
     else:
-        return sum(sorted(lst)[n//2-1:n//2+1])/2.0
+        return sum(sorted(lst)[n // 2 - 1:n // 2 + 1]) / 2.0
 
 
 def process_logfile(log_lines, report_size=1000, parse_error_perc_max=0.0):
     line_count = 0
     parsed_count = 0
     total_time = 0.0
-    
+
     stat = {}
     for line, parse_error in log_lines:
         line_count += 1
         if parse_error:
             continue
 
-        response_time = float(line.response_time)        
-        current_stat = stat.get(line.url, {'count':0, 'time_sum': 0.0, 'time_max':0.0, 'time_list':[]})
+        response_time = float(line.response_time)
+        current_stat = stat.get(
+            line.url, {'count': 0, 'time_sum': 0.0,
+                       'time_max': 0.0, 'time_list': []})
 
         current_stat['count'] = current_stat['count'] + 1
         current_stat['time_sum'] = current_stat['time_sum'] + response_time
-        current_stat['time_max'] = current_stat['time_max'] if response_time <= current_stat['time_sum'] else response_time
+        current_stat['time_max'] = (
+            current_stat['time_max']
+            if response_time <= current_stat['time_sum']
+            else response_time)
+
         current_stat['time_list'].append(response_time)
-        
+
         stat[line.url] = current_stat
-        
         parsed_count += 1
         total_time += response_time
 
     # проверяем чтобы процент ощибочных строк был не больше максимума
-    # 
-    if float(parsed_count)/line_count < (1.0 - parse_error_perc_max):
-        logging.error('Wrong format. %d of %d lines parsed. More than %d%% of errors - failed parsing', parsed_count, line_count, int(parse_error_perc_max*100))
+    #
+    if float(parsed_count) / line_count < (1.0 - parse_error_perc_max):
+        logging.error('Wrong format. %d of %d lines parsed. '
+                      'More than %d%% of errors - failed parsing',
+                      parsed_count, line_count,
+                      int(parse_error_perc_max * 100))
         raise Exception('Wrong format')
 
     # pass 2 - calculate aggregates & convert
-    logging.info("Calculating aggregates on total %d lines",parsed_count)
+    logging.info("Calculating aggregates on total %d lines", parsed_count)
 
     stat_list = []
-    for url,  data in stat.iteritems():
+    for url, data in stat.iteritems():
         stat_list.append({
-            'url':url,
-            'count':data['count'],
-            'time_max':data['time_max'],
-            'time_sum':data['time_sum'],
-            'time_avg':data['time_sum']/data['count'],
-            'time_med':median(data['time_list']), 
-            'time_perc':data['time_sum']/total_time,
-            'count_perc':float(data['count'])/parsed_count,
-            })
+            'url': url,
+            'count': data['count'],
+            'time_max': data['time_max'],
+            'time_sum': data['time_sum'],
+            'time_avg': data['time_sum'] / data['count'],
+            'time_med': median(data['time_list']),
+            'time_perc': data['time_sum'] / total_time,
+            'count_perc': float(data['count']) / parsed_count,
+        })
 
     # sort it
     import operator
@@ -184,48 +192,57 @@ def process_logfile(log_lines, report_size=1000, parse_error_perc_max=0.0):
 
     return stat_list[:report_size]
 
+
 def render_report(stat_list, template_filename):
-        """
-        Render stat into html file.
-        Uses REPORT_TEMPLATE from config as page-template
+    """
+    Render stat into html file.
+    Uses REPORT_TEMPLATE from config as page-template
 
-        :param stat - stat dict, where keys - uri`s
-        :param processed_date - inital date - used in resulting filename
+    :param stat - stat dict, where keys - uri`s
+    :param processed_date - inital date - used in resulting filename
 
-        result row: {"count": 2767, "time_avg": 62.994999999999997, "time_max": 9843.5689999999995, 
-                     "time_sum": 174306.35200000001, "url": "/api/v2/internal/html5/phantomjs/queue/?wait=1m", 
-                     "time_med": 60.073, "time_perc": 9.0429999999999993, "count_perc": 0.106}
-        """
+    result row: {"count": 2767,
+                 "time_avg": 62.994999999999997,
+                 "time_max": 9843.5689999999995,
+                 "time_sum": 174306.35200000001,
+                 "url": "/api/v2/internal/html5/phantomjs/queue/?wait=1m",
+                 "time_med": 60.073,
+                 "time_perc": 9.0429999999999993,
+                 "count_perc": 0.106}
+    """
 
-        # re-format stat to list
-        stat_rows = []
-        for data in stat_list:
-            stat_rows.append({
-                'url':data['url'],
-                'count':data['count'],
-                'time_avg':'{0:.10f}'.format(data['time_avg']),
-                'time_max':'{0:.10f}'.format(data['time_max']),
-                'time_sum':'{0:.10f}'.format(data['time_sum']),
-                'time_med':'{0:.10f}'.format(data['time_med']),
-                'time_perc':'{0:.10f}'.format(data['time_perc']),
-                'count_perc':'{0:.10f}'.format(data['count_perc']),
-                })
+    # re-format stat to list
+    stat_rows = []
+    for data in stat_list:
+        stat_rows.append({
+            'url': data['url'],
+            'count': data['count'],
+            'time_avg': '{0:.10f}'.format(data['time_avg']),
+            'time_max': '{0:.10f}'.format(data['time_max']),
+            'time_sum': '{0:.10f}'.format(data['time_sum']),
+            'time_med': '{0:.10f}'.format(data['time_med']),
+            'time_perc': '{0:.10f}'.format(data['time_perc']),
+            'count_perc': '{0:.10f}'.format(data['count_perc']),
+        })
 
-        stat_json = json.dumps(stat_rows)
+    stat_json = json.dumps(stat_rows)
 
-        try:
-            with open(template_filename, "r") as ftemp:
-                template = "".join(ftemp.readlines())
-        except Exception as e:
-            logging.error('Failed to read report template file "%s": %s', template_filename, e.message)
-            return None
+    try:
+        with open(template_filename, "r") as ftemp:
+            template = "".join(ftemp.readlines())
+    except Exception as e:
+        logging.error('Failed to read report template file "%s": %s',
+                      template_filename, e.message)
+        return None
 
-        report_str = template.replace('$table_json', stat_json)
-        return report_str  
+    report_str = template.replace('$table_json', stat_json)
+    return report_str
+
 
 def get_report_filename(report_dir, report_datetime):
-    return os.path.join(report_dir, "report_%s.html"%datetime.strftime(report_datetime, "%Y.%m.%d"))
-        
+    return os.path.join(report_dir, "report_%s.html" %
+                        datetime.strftime(report_datetime, "%Y.%m.%d"))
+
 
 def save_report(report_str, report_filename):
     report_tmp_filename = "./report.tmp"
@@ -248,52 +265,51 @@ def save_report(report_str, report_filename):
 
 def update_ts_file(ts_filename):
     timestamp = int(time.mktime(datetime.now().timetuple()))
-    
+
     try:
         with open(ts_filename, 'w') as ts_file:
             ts_file.write(str(timestamp))
     except Exception as e:
-        log.error('Unable to update ts file "%s": %s', ts_filename, e.message)
+        logging.error('Unable to update ts file "%s": %s',
+                      ts_filename, e.message)
         return False
 
     return True
 
 
 def process(config):
-    #base dir
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-
-    # get log files
-    # from_datetime = load_last_processed(config['LAST_PROCESSED_FILE'])
-
+    # get last logfile
     try:
         log_files_list = os.listdir(config['LOG_DIR'])
     except Exception as e:
-        logging.error('Could not open log-dir %s. message: %s', config['LOG_DIR'], e.message)
+        logging.error('Could not open log-dir %s. message: %s',
+                      config['LOG_DIR'], e.message)
         return False
 
-    # get last log file
-    target_logfile_data = get_last_log(log_files_list, config['LOG_FILE_PATTERN'])
+    target_logfile_data = get_last_log(
+        log_files_list, config['LOG_FILE_PATTERN'])
     if not target_logfile_data:
         logging.info('No logfile found. Exiting')
         return False
 
     # create report filename
-    report_filename = get_report_filename(config['REPORT_DIR'], target_logfile_data.date)
+    report_filename = get_report_filename(config['REPORT_DIR'],
+                                          target_logfile_data.date)
 
     # check if report exists
     if os.path.isfile(report_filename):
-        logging.info("Report for %s already exists. Exiting", target_logfile_data.date.isoformat())
+        logging.info("Report for %s already exists. Exiting",
+                     target_logfile_data.date.isoformat())
         return False
-    
+
     logging.info("Processing logfile: %s" % target_logfile_data.filename)
     log_path = os.path.join(config['LOG_DIR'], target_logfile_data.filename)
     try:
         stat = process_logfile(
-            log_lines=xread_loglines(log_path), 
-            report_size=int(config['REPORT_SIZE']), 
-            parse_error_perc_max = config.get('PARSE_ERROR_PERC_MAX', 0.2)
-            )
+            log_lines=xread_loglines(log_path),
+            report_size=int(config['REPORT_SIZE']),
+            parse_error_perc_max=config.get('PARSE_ERROR_PERC_MAX', 0.2)
+        )
     except Exception as e:
         logging.error('Processing failed: %s', e.message)
         return False
@@ -303,41 +319,46 @@ def process(config):
     print("report file: %s" % report_filename)
 
     if saved:
-        updated_ts = update_ts_file(config['TS_FILE'])
+        update_ts_file(config['TS_FILE'])
 
     return True
 
+
 def main():
 
-    # options 
+    # options
     arg_parser = argparse.ArgumentParser()
-    arg_parser.add_argument('--config', dest='config_file', default='/usr/local/etc/log_analyzer.conf', help='path to config-file')
+    arg_parser.add_argument('--config',
+                            dest='config_file',
+                            default='/usr/local/etc/log_analyzer.conf',
+                            help='path to config-file')
     args = arg_parser.parse_args()
 
     config = init_config(args.config_file)
     if not config:
-        sys.exit()
+        sys.exit(1)
 
     print("Started %s" % datetime.now().isoformat())
-    
+
     # logging
     logging.basicConfig(
-        format='[%(asctime)s] %(levelname).1s %(message)s', 
+        format='[%(asctime)s] %(levelname).1s %(message)s',
         datefmt='%Y.%m.%d %H:%M:%S',
         level=logging.INFO,
         filename=config.get("PROCESS_LOG", None)
-        )
-    
+    )
+
     logging.info('Processing started')
     # process
     try:
         process(config)
-    except Exception as e:
-        logging.error('Processing error: %s', e.message)
-        sys.exit()
-    
+    except Exception:
+        logging.exception('Processing error')
+        sys.exit(1)
+
     logging.info('Processing finished')
     print("Finished %s" % datetime.now().isoformat())
+
 
 if __name__ == "__main__":
     try:

@@ -284,12 +284,15 @@ def process(config):
     except Exception as e:
         logging.error('Could not open log-dir %s. message: %s',
                       config['LOG_DIR'], e.message)
+        update_ts_file(config['TS_FILE'])
         return False
 
     target_logfile_data = get_last_log(
         log_files_list, config['LOG_FILE_PATTERN'])
+    
     if not target_logfile_data:
         logging.info('No logfile found. Exiting')
+        update_ts_file(config['TS_FILE'])
         return False
 
     # create report filename
@@ -300,6 +303,7 @@ def process(config):
     if os.path.isfile(report_filename):
         logging.info("Report for %s already exists. Exiting",
                      target_logfile_data.date.isoformat())
+        update_ts_file(config['TS_FILE'])
         return False
 
     logging.info("Processing logfile: %s" % target_logfile_data.filename)

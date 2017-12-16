@@ -10,6 +10,7 @@ import shutil
 import logging
 import re
 import time
+import operator
 import ConfigParser
 
 from datetime import datetime
@@ -30,7 +31,7 @@ def init_config(config_filename):
         "TS_FILE": "./log_analyzer.ts",
         "LAST_PROCESSED_FILE": "./last_processed.ts",
         "LOG_DIR": "./log",
-        "LOG_FILE_PATTERN": "nginx-access-ui.log-(\d+).(gz|log)",
+        "LOG_FILE_PATTERN": "nginx-access-ui.log-(\d{8}).(gz|log)",
         "PARSE_ERROR_PERC_MAX": 0.2
     }
 
@@ -187,7 +188,6 @@ def process_logfile(log_lines, report_size=1000, parse_error_perc_max=0.0):
         })
 
     # sort it
-    import operator
     stat_list.sort(key=operator.itemgetter('time_avg'), reverse=True)
 
     return stat_list[:report_size]
@@ -292,8 +292,7 @@ def process(config):
     
     if not target_logfile_data:
         logging.info('No logfile found. Exiting')
-        update_ts_file(config['TS_FILE'])
-        return False
+        return True
 
     # create report filename
     report_filename = get_report_filename(config['REPORT_DIR'],
@@ -303,8 +302,7 @@ def process(config):
     if os.path.isfile(report_filename):
         logging.info("Report for %s already exists. Exiting",
                      target_logfile_data.date.isoformat())
-        update_ts_file(config['TS_FILE'])
-        return False
+        return True
 
     logging.info("Processing logfile: %s" % target_logfile_data.filename)
     log_path = os.path.join(config['LOG_DIR'], target_logfile_data.filename)
@@ -320,10 +318,7 @@ def process(config):
 
     report_str = render_report(stat, config['REPORT_TEMPLATE'])
     saved = save_report(report_str, report_filename)
-    print("report file: %s" % report_filename)
-
-    if saved:
-        update_ts_file(config['TS_FILE'])
+    logging.info("Report generated: %s", report_filename)
 
     return True
 
@@ -355,10 +350,14 @@ def main():
     logging.info('Processing started')
     # process
     try:
-        process(config)
+        processed = process(config)
     except Exception:
         logging.exception('Processing error')
         sys.exit(1)
+
+    if processed:
+        update_ts_file(config['TS_FILE'])
+
 
     logging.info('Processing finished')
     print("Finished %s" % datetime.now().isoformat())

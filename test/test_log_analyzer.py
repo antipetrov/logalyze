@@ -100,7 +100,6 @@ class LogAnalyzerCase(unittest.TestCase):
             'datefmt':'%Y.%m.%d %H:%M:%S',
             'level':logging.INFO,
             'filename': config['PROCESS_LOG']
-
             }
 
         logging.basicConfig(**logging_params)
@@ -114,11 +113,20 @@ class LogAnalyzerCase(unittest.TestCase):
         processed = process(config)
         self.assertEqual(True, processed)
 
+        
+    def test_ts_file(self):
+        config = {
+            "TS_FILE": "./test/test.ts",
+        }
+
+        update_ts_file(config['TS_FILE'])
+    
         # check ts-file
         with open(config['TS_FILE']) as ts_file:
             tstamp = int(ts_file.readline())
 
         self.assertEqual(int(os.path.getmtime(config['TS_FILE'])), tstamp)
+
 
     def test_error_percent(self):
         config = {

@@ -149,8 +149,6 @@ class LogAnalyzerCase(unittest.TestCase):
         with self.assertRaises(Exception):
             processed = process_logfile(parsed_lines, 1000, 0.2)
 
-        # self.assertEqual(False, processed)
-
 
     def test_repeat_process(self):
         config = {
@@ -164,11 +162,17 @@ class LogAnalyzerCase(unittest.TestCase):
             "LAST_PROCESSED_FILE": "./test/last_processed.ts",
         }
 
-        with open(os.path.join(config['REPORT_DIR'], 'report_2017.07.11.html'), 'w') as old_report:
-            old_report.write('-')
+        old_report_file = os.path.join(config['REPORT_DIR'], 'report_2017.07.11.html')
+        with open(old_report_file, 'w') as old_report:
+            old_report.write('TESTLINE')
 
         processed = process(config)
-        self.assertEqual(False, processed)
+
+        with open(old_report_file, 'r') as old_report:
+            report_line = old_report.readline()
+
+        self.assertEqual(True, processed)
+        self.assertEqual('TESTLINE', report_line.strip())
 
     def test_total_parse_errors(self):
         pass

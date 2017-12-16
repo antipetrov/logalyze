@@ -297,12 +297,12 @@ def process(config):
     # create report filename
     report_filename = get_report_filename(config['REPORT_DIR'],
                                           target_logfile_data.date)
-
+    
     # check if report exists
     if os.path.isfile(report_filename):
         logging.info("Report for %s already exists. Exiting",
                      target_logfile_data.date.isoformat())
-        return False
+        return True
 
     logging.info("Processing logfile: %s" % target_logfile_data.filename)
     log_path = os.path.join(config['LOG_DIR'], target_logfile_data.filename)
